@@ -1,0 +1,164 @@
+asyncapi: 3.0.0
+
+info:
+  title: organization-service — Eventos
+  version: 1.0.0
+  description: >
+    Contrato de mensajería de organization-service sobre RabbitMQ. Modelo Opción A:
+    organization-service NO emite `organization.org.created` (la organización la crea
+    auth-service al registrar al fundador). Este servicio emite `org.updated` cuando se
+    completa/actualiza el perfil fiscal, y los eventos de establecimientos/puntos de
+    emisión. Los eventos se escriben con el patrón Outbox (misma transacción); el relay
+    a RabbitMQ es infraestructura compartida (pendiente).
+
+
+    Convención: exchange topic `crm.events`; la routing key es el `type` del evento.
+    Nombres en pasado.
+
+defaultContentType: application/json
+
+servers:
+  rabbitmq:
+    host: localhost:5672
+    protocol: amqp
+    description: Broker RabbitMQ (dev). En producción, la URL va en RABBITMQ_URL.
+    bindings:
+      amqp:
+        vhost: /
+
+channels:
+  orgUpdated:
+    address: organization.org.updated
+    description: Se completó o actualizó el perfil fiscal de una organización.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      orgUpdated: { $ref: '#/components/messages/OrgUpdated' }
+
+  establishmentCreated:
+    address: organization.establishment.created
+    description: Se creó un establecimiento (incluye la matriz 001 en el aprovisionamiento inicial).
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      establishmentCreated: { $ref: '#/components/messages/EstablishmentCreated' }
+
+  billingPointCreated:
+    address: organization.billing_point.created
+    description: Se creó un punto de emisión (billing_point). billing inicializa su secuencial.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      billingPointCreated: { $ref: '#/components/messages/BillingPointCreated' }
+
+  taxCountryEnabled:
+    address: tax.country.enabled
+    description: (Consumido) tax-service habilitó un país; alimenta el read-model `countries`.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      taxCountryEnabled: { $ref: '#/components/messages/TaxCountryEnabled' }
+
+operations:
+  publishOrgUpdated:
+    action: send
+    channel: { $ref: '#/channels/orgUpdated' }
+    summary: Emite organization.org.updated (auth refresca country_code del token; billing snapshot del emisor).
+
+  publishEstablishmentCreated:
+    action: send
+    channel: { $ref: '#/channels/establishmentCreated' }
+    summary: Emite organization.establishment.created (billing registra punto válido).
+
+  publishBillingPointCreated:
+    action: send
+    channel: { $ref: '#/channels/billingPointCreated' }
+    summary: Emite organization.billing_point.created (billing inicializa el secuencial).
+
+  consumeTaxCountryEnabled:
+    action: receive
+    channel: { $ref: '#/channels/taxCountryEnabled' }
+    summary: Consume tax.country.enabled y hace upsert del read-model `countries`.
+
+components:
+  messageTraits:
+    eventEnvelope:
+      headers:
+        type: object
+        properties:
+          eventId: { type: string, format: uuid, description: Idempotencia. }
+          type: { type: string, description: Tipo del evento = routing key. }
+          occurredAt: { type: string, format: date-time }
+          organizationId: { type: string, format: uuid, nullable: true }
+
+  messages:
+    OrgUpdated:
+      name: organization.org.updated
+      title: Perfil de organización actualizado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/OrgUpdatedPayload' }
+    EstablishmentCreated:
+      name: organization.establishment.created
+      title: Establecimiento creado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/EstablishmentCreatedPayload' }
+    BillingPointCreated:
+      name: organization.billing_point.created
+      title: Punto de emisión creado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/BillingPointCreatedPayload' }
+    TaxCountryEnabled:
+      name: tax.country.enabled
+      title: País habilitado (consumido)
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/TaxCountryEnabledPayload' }
+
+  schemas:
+    OrgUpdatedPayload:
+      type: object
+      required: [organizationId]
+      properties:
+        organizationId: { type: string, format: uuid }
+        legalName: { type: string, nullable: true }
+        tradeName: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true, example: EC }
+    EstablishmentCreatedPayload:
+      type: object
+      required: [organizationId, establishmentId, code]
+      properties:
+        organizationId: { type: string, format: uuid }
+        establishmentId: { type: string, format: uuid }
+        code: { type: string, example: "001" }
+        countryCode: { type: string, example: EC }
+    BillingPointCreatedPayload:
+      type: object
+      required: [organizationId, establishmentId, emissionPointId, code]
+      properties:
+        organizationId: { type: string, format: uuid }
+        establishmentId: { type: string, format: uuid }
+        emissionPointId: { type: string, format: uuid }
+        code: { type: string, example: "001" }
+        countryCode: { type: string, example: EC }
+    TaxCountryEnabledPayload:
+      type: object
+      required: [countryCode]
+      properties:
+        countryCode: { type: string, example: EC }
+        name: { type: string, nullable: true, example: Ecuador }
+        currencyCode: { type: string, nullable: true, example: USD }

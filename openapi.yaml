@@ -1,0 +1,386 @@
+openapi: 3.0.3
+
+info:
+  title: organization-service API
+  version: 1.0.0
+  description: >
+    Dueño del perfil fiscal y la estructura de la organización (datos fiscales,
+    establecimientos, puntos de emisión). Modelo Opción A: la organización ya existe
+    (la creó auth-service al registrar al fundador); este servicio gestiona su PERFIL,
+    identificado por `organization_id` que llega en la cabecera `X-Organization-Id`.
+
+
+    No verifica JWT: confía en las cabeceras que inyecta el gateway. Todas las rutas
+    (salvo /health) exigen `X-Organization-Id`; el enforcement fino usa `X-Permissions`.
+    Aislamiento por `organization_id`: operar sobre un recurso de otra organización
+    responde 404.
+
+servers:
+  - url: http://localhost:3002
+    description: Desarrollo local (puerto interno; en producción va tras el api-gateway)
+
+tags:
+  - name: health
+  - name: organization
+  - name: establishments
+  - name: countries
+
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Healthcheck
+      responses:
+        '200':
+          description: Operativo
+          content:
+            application/json:
+              schema: { type: object, properties: { status: { type: string, example: ok } } }
+
+  /organizations/me:
+    get:
+      tags: [organization]
+      summary: Perfil de la organización activa
+      description: Devuelve el perfil o, si aún no se completó, un placeholder con `completed:false`.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Perfil de la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+      x-required-permission: organization:read
+    put:
+      tags: [organization]
+      summary: Completar / actualizar el perfil fiscal
+      description: >
+        Fija razón social + RUC + país de la organización activa. En la PRIMERA vez
+        (aún sin establecimientos) aprovisiona el establecimiento matriz 001 y el punto
+        de emisión 001, y emite `organization.establishment.created` +
+        `organization.billing_point.created`. Siempre emite `organization.org.updated`.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertOrganizationRequest' }
+            examples:
+              ec:
+                value: { legalName: Acme S.A., tradeName: Acme, taxId: "1790012345001", countryCode: EC }
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: RUC ya registrado en ese país
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: TAX_ID_EXISTS, message: Ya existe una organización con ese RUC en el país. }
+        '422':
+          description: País no habilitado o RUC con formato inválido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: INVALID_TAX_ID, message: El RUC de Ecuador debe tener 13 dígitos. }
+      x-required-permission: organization:update
+    patch:
+      tags: [organization]
+      summary: Actualizar nombre / settings (no fiscal)
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationRequest' }
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Organización sin perfil
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: organization:update
+
+  /organizations/me/countries:
+    get:
+      tags: [countries]
+      summary: Países adicionales de la organización
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/OrganizationCountry' } }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+      x-required-permission: organization:read
+    post:
+      tags: [countries]
+      summary: Habilitar un país adicional (sucursal extranjera)
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddCountryRequest' }
+      responses:
+        '201':
+          description: País agregado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationCountry' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: País no habilitado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: organization:update
+
+  /establishments:
+    get:
+      tags: [establishments]
+      summary: Listar establecimientos
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Establishment' } }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+      x-required-permission: establishment:read
+    post:
+      tags: [establishments]
+      summary: Crear establecimiento (código correlativo automático)
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEstablishmentRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Establishment' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: establishment:create
+
+  /establishments/{id}:
+    patch:
+      tags: [establishments]
+      summary: Actualizar establecimiento
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateEstablishmentRequest' }
+      responses:
+        '200':
+          description: Actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Establishment' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No encontrado (o de otra organización)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422':
+          description: No se puede desactivar la matriz
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { code: CANNOT_DEACTIVATE_MAIN, message: No se puede desactivar el establecimiento matriz. }
+      x-required-permission: establishment:update
+
+  /establishments/{id}/billing-points:
+    get:
+      tags: [establishments]
+      summary: Listar puntos de emisión del establecimiento
+      description: En el dominio se llaman "emission points"; la ruta conserva `billing-points` por contrato con billing.
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/EmissionPoint' } }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Establecimiento no encontrado (o de otra organización)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: establishment:read
+    post:
+      tags: [establishments]
+      summary: Crear punto de emisión (código correlativo automático)
+      parameters:
+        - { $ref: '#/components/parameters/OrgHeader' }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateEmissionPointRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmissionPoint' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Establecimiento no encontrado (o de otra organización)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: establishment:create
+
+components:
+  parameters:
+    OrgHeader:
+      name: X-Organization-Id
+      in: header
+      required: true
+      description: Organización activa; lo inyecta el gateway desde el JWT.
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Organization:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        legalName: { type: string, nullable: true }
+        tradeName: { type: string, nullable: true }
+        taxId: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true, example: EC }
+        status: { type: string, enum: [active, suspended] }
+        completed: { type: boolean, description: true si el perfil fiscal ya se completó (RUC + país). }
+        settings: { type: object, nullable: true, additionalProperties: true }
+    Establishment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        code: { type: string, example: "001" }
+        name: { type: string }
+        countryCode: { type: string, example: EC }
+        address: { type: string, nullable: true }
+        isMain: { type: boolean }
+        status: { type: string, enum: [active, inactive] }
+    EmissionPoint:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        establishmentId: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        code: { type: string, example: "001" }
+        name: { type: string, nullable: true }
+        status: { type: string, enum: [active, inactive] }
+    OrganizationCountry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        countryCode: { type: string, example: PE }
+        enabled: { type: boolean }
+    UpsertOrganizationRequest:
+      type: object
+      required: [legalName, taxId, countryCode]
+      properties:
+        legalName: { type: string, maxLength: 255 }
+        tradeName: { type: string, maxLength: 255 }
+        taxId: { type: string, maxLength: 20, description: RUC/RFC/NIT; formato validado por país. }
+        countryCode: { type: string, minLength: 2, maxLength: 2, example: EC }
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        legalName: { type: string, maxLength: 255 }
+        tradeName: { type: string, maxLength: 255 }
+        settings: { type: object, additionalProperties: true }
+    CreateEstablishmentRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 255 }
+        address: { type: string, maxLength: 255 }
+        countryCode: { type: string, minLength: 2, maxLength: 2, description: Por defecto, el de la organización. }
+    UpdateEstablishmentRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 255 }
+        address: { type: string, maxLength: 255 }
+        status: { type: string, enum: [active, inactive] }
+    CreateEmissionPointRequest:
+      type: object
+      properties:
+        name: { type: string, maxLength: 255 }
+    AddCountryRequest:
+      type: object
+      required: [countryCode]
+      properties:
+        countryCode: { type: string, minLength: 2, maxLength: 2 }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: ORG_NOT_FOUND }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: VALIDATION_ERROR, message: La petición no es válida., details: [{ field: name, message: El nombre es obligatorio. }] }
+    OrgContextRequired:
+      description: Falta el contexto de organización (X-Organization-Id)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: ORG_CONTEXT_REQUIRED, message: Falta el contexto de organización. }
+    Forbidden:
+      description: Permiso insuficiente
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: FORBIDDEN, message: Permiso insuficiente. }
