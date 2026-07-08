@@ -9,6 +9,7 @@ const schema = z.object({
   DB_USER: z.string().min(1),
   DB_PASSWORD: z.string().default(''),
   DB_NAME: z.string().min(1),
+  RABBITMQ_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
 });
 
@@ -32,6 +33,7 @@ export interface AppConfig {
   DB_USER: string;
   DB_PASSWORD: string;
   DB_NAME: string;
+  RABBITMQ_URL: string | undefined;
   CORS_ORIGIN: string;
 }
 
@@ -43,5 +45,6 @@ export const config: AppConfig = {
   DB_USER: env.DB_USER,
   DB_PASSWORD: env.DB_PASSWORD,
   DB_NAME: env.DB_NAME,
+  RABBITMQ_URL: env.RABBITMQ_URL,
   CORS_ORIGIN: env.CORS_ORIGIN,
 };

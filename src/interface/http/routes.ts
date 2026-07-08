@@ -67,13 +67,13 @@ export function organizationRoutes(deps: AppDependencies): Hono<Vars> {
 
   r.put('/organizations/me',
     requireOrganization(),
-    requirePermission('organization:update'),
+    requirePermission('organization:admin'),
     validateJson(upsertOrganizationSchema),
     upsertOrganizationController(useCases.upsertOrganization));
 
   r.patch('/organizations/me',
     requireOrganization(),
-    requirePermission('organization:update'),
+    requirePermission('organization:admin'),
     validateJson(updateOrganizationSchema),
     updateOrganizationController(useCases.updateOrganization));
 
@@ -84,7 +84,7 @@ export function organizationRoutes(deps: AppDependencies): Hono<Vars> {
 
   r.post('/organizations/me/countries',
     requireOrganization(),
-    requirePermission('organization:update'),
+    requirePermission('organization:admin'),
     validateJson(addCountrySchema),
     addOrganizationCountryController(useCases.addOrganizationCountry));
 

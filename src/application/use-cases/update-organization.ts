@@ -1,4 +1,4 @@
-import { OrganizationNotFoundError } from '../../domain/errors';
+import { Organization } from '../../domain/entities';
 import { UnitOfWork } from '../ports';
 import { OrganizationDTO, UpdateOrganizationInput } from '../dtos';
 
@@ -7,8 +7,10 @@ export class UpdateOrganizationUseCase {
 
   async execute(input: UpdateOrganizationInput): Promise<OrganizationDTO> {
     return this.uow.execute(async (repos) => {
-      const org = await repos.organizations.findById(input.organizationId);
-      if (!org) throw new OrganizationNotFoundError();
+      let org = await repos.organizations.findById(input.organizationId);
+      if (!org) {
+        org = Organization.create({ id: input.organizationId });
+      }
 
       org.updateSettings({
         legalName: input.legalName,

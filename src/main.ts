@@ -13,6 +13,7 @@ import { ListEmissionPointsUseCase } from './application/use-cases/list-emission
 import { CreateEmissionPointUseCase } from './application/use-cases/create-emission-point';
 import { ListOrganizationCountriesUseCase } from './application/use-cases/list-organization-countries';
 import { AddOrganizationCountryUseCase } from './application/use-cases/add-organization-country';
+import { OutboxRelay } from './infrastructure/messaging/relay';
 import { createApp } from './interface/http/app';
 
 async function main(): Promise<void> {
@@ -36,6 +37,12 @@ async function main(): Promise<void> {
     },
     corsOrigin: config.CORS_ORIGIN,
   });
+
+  if (config.RABBITMQ_URL) {
+    const relay = new OutboxRelay();
+    await relay.start(config.RABBITMQ_URL);
+    console.log('[messaging] outbox relay iniciado');
+  }
 
   serve({ fetch: app.fetch, port: config.PORT }, (info) => {
     console.log(`organization-service escuchando en http://localhost:${info.port}`);
