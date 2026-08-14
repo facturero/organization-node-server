@@ -51,6 +51,10 @@ spec:
                   key: name
             - name: CORS_ORIGIN
               value: "https://tudominio.com"
+            - name: OTEL_SERVICE_NAME
+              value: "organization-service"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4318"
           resources:
             requests:
               memory: "128Mi"
