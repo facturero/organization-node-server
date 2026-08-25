@@ -29,6 +29,12 @@ export const updateEstablishmentSchema = z.object({
 
 export const createEmissionPointSchema = z.object({
   name: z.string().max(255).optional(),
+  type: z.enum(['web', 'pos']).optional(),
+});
+
+export const pairPosTerminalSchema = z.object({
+  code: z.string().length(6, 'El código debe tener 6 dígitos.').regex(/^\d{6}$/, 'El código debe ser numérico.'),
+  deviceId: z.string().uuid('deviceId debe ser un UUID válido.'),
 });
 
 export const addCountrySchema = z.object({

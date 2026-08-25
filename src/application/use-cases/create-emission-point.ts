@@ -1,3 +1,4 @@
+import { authenticator } from 'otplib';
 import { EstablishmentNotFoundError } from '../../domain/errors';
 import { EmissionPoint } from '../../domain/entities';
 import { UnitOfWork } from '../ports';
@@ -14,12 +15,18 @@ export class CreateEmissionPointUseCase {
       }
 
       const code = await repos.emissionPoints.nextCode(input.establishmentId);
+      const type = input.type ?? 'web';
 
       const ep = EmissionPoint.create({
         establishmentId: input.establishmentId,
         organizationId: input.organizationId,
         code,
         name: input.name ?? null,
+        type,
+        // Los puntos tipo "pos" nacen con un secreto TOTP ya generado, listo
+        // para mostrar el código rotativo apenas se crean (no hace falta un
+        // paso aparte de "activar" el emparejamiento).
+        totpSecret: type === 'pos' ? authenticator.generateSecret() : null,
       });
       await repos.emissionPoints.save(ep);
 
@@ -44,6 +51,8 @@ export class CreateEmissionPointUseCase {
         code: ep.code,
         name: ep.name,
         status: ep.status,
+        type: ep.type,
+        paired: ep.isPaired(),
       };
     });
   }

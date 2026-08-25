@@ -89,3 +89,21 @@ export class CannotDeactivateMainError extends AppError {
   readonly httpStatus = 422;
   constructor(message = 'No se puede desactivar el establecimiento matriz.') { super(message); }
 }
+
+export class InvalidPairingCodeError extends AppError {
+  readonly code = 'INVALID_PAIRING_CODE';
+  readonly httpStatus = 401;
+  constructor(message = 'El código no es válido o ya expiró.') { super(message); }
+}
+
+export class EmissionPointNotPosTypeError extends AppError {
+  readonly code = 'EMISSION_POINT_NOT_POS';
+  readonly httpStatus = 422;
+  constructor(message = 'Este punto de emisión no es de tipo POS.') { super(message); }
+}
+
+export class ServiceProvisioningError extends AppError {
+  readonly code = 'SERVICE_PROVISIONING_FAILED';
+  readonly httpStatus = 502;
+  constructor(message = 'No se pudo aprovisionar las credenciales del terminal.') { super(message); }
+}

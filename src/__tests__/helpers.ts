@@ -61,6 +61,11 @@ export function createInMemoryRepositories(): Repositories & { events: DomainEve
         const max = list.reduce((m, e) => Math.max(m, parseInt(e.code, 10) || 0), 0);
         return String(max + 1).padStart(3, '0');
       },
+      async listUnpairedPosPoints() {
+        return Array.from(eps.values()).filter(
+          (e) => e.type === 'pos' && e.status === 'active' && e.pairedAt === null,
+        );
+      },
       async save(ep) {
         eps.set(ep.id, EmissionPoint.fromPersistence({ ...ep.toPersistence() }));
       },

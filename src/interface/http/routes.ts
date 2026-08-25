@@ -9,10 +9,14 @@ import { ListEmissionPointsUseCase } from '../../application/use-cases/list-emis
 import { CreateEmissionPointUseCase } from '../../application/use-cases/create-emission-point';
 import { ListOrganizationCountriesUseCase } from '../../application/use-cases/list-organization-countries';
 import { AddOrganizationCountryUseCase } from '../../application/use-cases/add-organization-country';
+import { GetPairingCodeUseCase } from '../../application/use-cases/get-pairing-code';
+import { PairPosTerminalUseCase } from '../../application/use-cases/pair-pos-terminal';
+import { UnlinkEmissionPointUseCase } from '../../application/use-cases/unlink-emission-point';
 import {
   addCountrySchema,
   createEmissionPointSchema,
   createEstablishmentSchema,
+  pairPosTerminalSchema,
   updateEstablishmentSchema,
   updateOrganizationSchema,
   upsertOrganizationSchema,
@@ -23,9 +27,12 @@ import {
   createEmissionPointController,
   createEstablishmentController,
   getMyOrganizationController,
+  getPairingCodeController,
   listEmissionPointsController,
   listEstablishmentsController,
   listOrganizationCountriesController,
+  pairPosTerminalController,
+  unlinkEmissionPointController,
   updateEstablishmentController,
   updateOrganizationController,
   upsertOrganizationController,
@@ -44,6 +51,9 @@ export interface AppDependencies {
     updateEstablishment: UpdateEstablishmentUseCase;
     listEmissionPoints: ListEmissionPointsUseCase;
     createEmissionPoint: CreateEmissionPointUseCase;
+    getPairingCode: GetPairingCodeUseCase;
+    pairPosTerminal: PairPosTerminalUseCase;
+    unlinkEmissionPoint: UnlinkEmissionPointUseCase;
     listOrganizationCountries: ListOrganizationCountriesUseCase;
     addOrganizationCountry: AddOrganizationCountryUseCase;
   };
@@ -122,6 +132,31 @@ export function establishmentRoutes(deps: AppDependencies): Hono<Vars> {
     requirePermission('establishment:create'),
     validateJson(createEmissionPointSchema),
     createEmissionPointController(useCases.createEmissionPoint));
+
+  r.get('/establishments/:id/billing-points/:pointId/pairing-code',
+    requireOrganization(),
+    requirePermission('establishment:read'),
+    getPairingCodeController(useCases.getPairingCode));
+
+  r.post('/establishments/:id/billing-points/:pointId/unlink',
+    requireOrganization(),
+    requirePermission('establishment:update'),
+    unlinkEmissionPointController(useCases.unlinkEmissionPoint));
+
+  return r;
+}
+
+// Rutas PÚBLICAS de emparejamiento: un terminal POS sin configurar no tiene
+// JWT ni contexto de organización todavía, así que estas rutas viven fuera
+// de establishmentRoutes() (que exige requireOrganization en todo lo demás)
+// y se registran en el gateway con `public: true`.
+export function pairingRoutes(deps: AppDependencies): Hono {
+  const r = new Hono();
+  const { useCases } = deps;
+
+  r.post('/billing-points/pair',
+    validateJson(pairPosTerminalSchema),
+    pairPosTerminalController(useCases.pairPosTerminal));
 
   return r;
 }

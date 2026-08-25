@@ -73,6 +73,10 @@ export class EmissionPointModel extends Model<
   declare code: string;
   declare name: string | null;
   declare status: 'active' | 'inactive';
+  declare type: 'web' | 'pos';
+  declare totp_secret: string | null;
+  declare paired_at: Date | null;
+  declare paired_device_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -85,6 +89,10 @@ EmissionPointModel.init(
     code: { type: DataTypes.STRING(3), allowNull: false },
     name: { type: DataTypes.STRING(255), allowNull: true },
     status: { type: DataTypes.ENUM('active', 'inactive'), allowNull: false, defaultValue: 'active' },
+    type: { type: DataTypes.ENUM('web', 'pos'), allowNull: false, defaultValue: 'web' },
+    totp_secret: { type: DataTypes.STRING(64), allowNull: true },
+    paired_at: { type: DataTypes.DATE, allowNull: true },
+    paired_device_id: { type: DataTypes.CHAR(36), allowNull: true },
     created_at: DataTypes.DATE,
     updated_at: DataTypes.DATE,
   },

@@ -13,6 +13,10 @@ import { ListEmissionPointsUseCase } from './application/use-cases/list-emission
 import { CreateEmissionPointUseCase } from './application/use-cases/create-emission-point';
 import { ListOrganizationCountriesUseCase } from './application/use-cases/list-organization-countries';
 import { AddOrganizationCountryUseCase } from './application/use-cases/add-organization-country';
+import { GetPairingCodeUseCase } from './application/use-cases/get-pairing-code';
+import { PairPosTerminalUseCase } from './application/use-cases/pair-pos-terminal';
+import { UnlinkEmissionPointUseCase } from './application/use-cases/unlink-emission-point';
+import { HttpServiceAccountProvisioner } from './infrastructure/auth-client';
 import { OutboxRelay } from './infrastructure/messaging/relay';
 import { createApp } from './interface/http/app';
 
@@ -22,6 +26,10 @@ async function main(): Promise<void> {
 
   const repos = buildRepositories();
   const uow = new SequelizeUnitOfWork();
+  const serviceAccountProvisioner = new HttpServiceAccountProvisioner(
+    config.AUTH_SERVICE_URL,
+    config.INTERNAL_SERVICE_SECRET,
+  );
 
   const app = createApp({
     useCases: {
@@ -33,6 +41,9 @@ async function main(): Promise<void> {
       updateEstablishment: new UpdateEstablishmentUseCase(uow),
       listEmissionPoints: new ListEmissionPointsUseCase(repos.establishments, repos.emissionPoints),
       createEmissionPoint: new CreateEmissionPointUseCase(uow),
+      getPairingCode: new GetPairingCodeUseCase(repos.establishments, repos.emissionPoints),
+      pairPosTerminal: new PairPosTerminalUseCase(uow, serviceAccountProvisioner),
+      unlinkEmissionPoint: new UnlinkEmissionPointUseCase(uow),
       listOrganizationCountries: new ListOrganizationCountriesUseCase(repos.organizationCountries),
       addOrganizationCountry: new AddOrganizationCountryUseCase(uow),
     },

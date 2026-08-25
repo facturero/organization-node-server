@@ -155,6 +155,8 @@ export class Establishment {
   }
 }
 
+export type EmissionPointType = 'web' | 'pos';
+
 export interface EmissionPointProps {
   id: string;
   establishmentId: string;
@@ -162,6 +164,12 @@ export interface EmissionPointProps {
   code: string;
   name: string | null;
   status: EstablishmentsStatus;
+  type: EmissionPointType;
+  totpSecret: string | null;
+  pairedAt: Date | null;
+  /** UUID del dispositivo POS (deviceId) que se emparejó; sirve para enrutar
+   * la desvinculación por socket.io al terminal exacto. */
+  pairedDeviceId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -175,6 +183,8 @@ export class EmissionPoint {
     code: string;
     name?: string | null;
     status?: EstablishmentsStatus;
+    type?: EmissionPointType;
+    totpSecret?: string | null;
   }): EmissionPoint {
     const now = new Date();
     return new EmissionPoint({
@@ -184,6 +194,10 @@ export class EmissionPoint {
       code: params.code,
       name: params.name ?? null,
       status: params.status ?? 'active',
+      type: params.type ?? 'web',
+      totpSecret: params.totpSecret ?? null,
+      pairedAt: null,
+      pairedDeviceId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -199,7 +213,34 @@ export class EmissionPoint {
   get code(): string { return this.props.code; }
   get name(): string | null { return this.props.name; }
   get status(): EstablishmentsStatus { return this.props.status; }
+  get type(): EmissionPointType { return this.props.type; }
+  get totpSecret(): string | null { return this.props.totpSecret; }
+  get pairedAt(): Date | null { return this.props.pairedAt; }
+  get pairedDeviceId(): string | null { return this.props.pairedDeviceId; }
   get createdAt(): Date { return this.props.createdAt; }
+
+  isPaired(): boolean {
+    return this.props.pairedAt !== null;
+  }
+
+  isPosTerminal(): boolean {
+    return this.props.type === 'pos';
+  }
+
+  markPaired(deviceId: string): void {
+    this.props.pairedAt = new Date();
+    this.props.pairedDeviceId = deviceId;
+    this.props.updatedAt = new Date();
+  }
+
+  /** "Desvincular y regenerar": limpia el emparejamiento y cambia el secreto TOTP
+   * (invalida cualquier código ya mostrado/memorizado del secreto anterior). */
+  unlinkAndRegenerate(newSecret: string): void {
+    this.props.pairedAt = null;
+    this.props.pairedDeviceId = null;
+    this.props.totpSecret = newSecret;
+    this.props.updatedAt = new Date();
+  }
 
   toPersistence(): EmissionPointProps {
     return { ...this.props };

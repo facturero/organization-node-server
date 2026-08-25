@@ -9,6 +9,9 @@ import { ListEmissionPointsUseCase } from '../../application/use-cases/list-emis
 import { CreateEmissionPointUseCase } from '../../application/use-cases/create-emission-point';
 import { ListOrganizationCountriesUseCase } from '../../application/use-cases/list-organization-countries';
 import { AddOrganizationCountryUseCase } from '../../application/use-cases/add-organization-country';
+import { GetPairingCodeUseCase } from '../../application/use-cases/get-pairing-code';
+import { PairPosTerminalUseCase } from '../../application/use-cases/pair-pos-terminal';
+import { UnlinkEmissionPointUseCase } from '../../application/use-cases/unlink-emission-point';
 import { ContextVariables } from './middlewares';
 
 export function getMyOrganizationController(useCase: GetMyOrganizationUseCase) {
@@ -116,13 +119,53 @@ export function createEmissionPointController(useCase: CreateEmissionPointUseCas
   return async (c: Context<{ Variables: ContextVariables }>) => {
     const orgId = c.get('organizationId');
     const estId = c.req.param('id') ?? '';
-    const body = c.req.valid('json' as never) as { name?: string };
+    const body = c.req.valid('json' as never) as { name?: string; type?: 'web' | 'pos' };
     const result = await useCase.execute({
       establishmentId: estId,
       organizationId: orgId,
       name: body.name,
+      type: body.type,
     });
     return c.json(result, 201);
+  };
+}
+
+export function getPairingCodeController(useCase: GetPairingCodeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const estId = c.req.param('id') ?? '';
+    const pointId = c.req.param('pointId') ?? '';
+    const result = await useCase.execute({
+      establishmentId: estId,
+      emissionPointId: pointId,
+      organizationId: orgId,
+    });
+    return c.json(result, 200);
+  };
+}
+
+export function unlinkEmissionPointController(useCase: UnlinkEmissionPointUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const estId = c.req.param('id') ?? '';
+    const pointId = c.req.param('pointId') ?? '';
+    const result = await useCase.execute({
+      establishmentId: estId,
+      emissionPointId: pointId,
+      organizationId: orgId,
+    });
+    return c.json(result, 200);
+  };
+}
+
+// Endpoint PÚBLICO (sin JWT/org context) — es el único punto de entrada de
+// un terminal POS que nunca se ha configurado, así que no puede depender de
+// autenticación previa. La validación real ocurre por el código TOTP.
+export function pairPosTerminalController(useCase: PairPosTerminalUseCase) {
+  return async (c: Context) => {
+    const body = c.req.valid('json' as never) as { code: string; deviceId: string };
+    const result = await useCase.execute({ code: body.code, deviceId: body.deviceId });
+    return c.json(result, 200);
   };
 }
 

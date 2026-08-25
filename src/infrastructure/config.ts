@@ -11,6 +11,8 @@ const schema = z.object({
   DB_NAME: z.string().min(1),
   RABBITMQ_URL: z.string().optional(),
   CORS_ORIGIN: z.string().default('*'),
+  AUTH_SERVICE_URL: z.string().default('http://localhost:3001'),
+  INTERNAL_SERVICE_SECRET: z.string().min(1),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -35,6 +37,8 @@ export interface AppConfig {
   DB_NAME: string;
   RABBITMQ_URL: string | undefined;
   CORS_ORIGIN: string;
+  AUTH_SERVICE_URL: string;
+  INTERNAL_SERVICE_SECRET: string;
 }
 
 export const config: AppConfig = {
@@ -47,4 +51,6 @@ export const config: AppConfig = {
   DB_NAME: env.DB_NAME,
   RABBITMQ_URL: env.RABBITMQ_URL,
   CORS_ORIGIN: env.CORS_ORIGIN,
+  AUTH_SERVICE_URL: env.AUTH_SERVICE_URL,
+  INTERNAL_SERVICE_SECRET: env.INTERNAL_SERVICE_SECRET,
 };

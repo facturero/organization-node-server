@@ -27,6 +27,8 @@ export interface EmissionPointDTO {
   code: string;
   name: string | null;
   status: 'active' | 'inactive';
+  type: 'web' | 'pos';
+  paired: boolean;
 }
 
 export interface OrganizationCountryDTO {
@@ -70,6 +72,28 @@ export interface CreateEmissionPointInput {
   establishmentId: string;
   organizationId: string;
   name?: string | null;
+  type?: 'web' | 'pos';
+}
+
+export interface PairingCodeDTO {
+  code: string;
+  secondsRemaining: number;
+}
+
+export interface PairPosTerminalInput {
+  code: string;
+  /** UUID estable del dispositivo POS (generado en el primer arranque). */
+  deviceId: string;
+}
+
+export interface PairPosTerminalOutput {
+  organizationId: string;
+  establishmentId: string;
+  emissionPointId: string;
+  accessToken: string;
+  tokenType: 'Bearer';
+  expiresIn: number;
+  refreshToken: string;
 }
 
 export interface AddOrganizationCountryInput {
@@ -101,6 +125,8 @@ export function toEmissionPointDTO(ep: {
   code: string;
   name: string | null;
   status: 'active' | 'inactive';
+  type: 'web' | 'pos';
+  paired: boolean;
 }): EmissionPointDTO {
   return { ...ep };
 }

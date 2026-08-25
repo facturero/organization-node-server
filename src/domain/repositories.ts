@@ -30,6 +30,9 @@ export interface EmissionPointRepository {
   findById(id: string): Promise<EmissionPoint | null>;
   listByEstablishment(establishmentId: string): Promise<EmissionPoint[]>;
   nextCode(establishmentId: string): Promise<string>;
+  /** Todos los puntos de emisión tipo 'pos' activos y sin emparejar (paired_at IS NULL),
+   * de CUALQUIER organización — el POS todavía no sabe a qué org pertenece antes de emparejar. */
+  listUnpairedPosPoints(): Promise<EmissionPoint[]>;
   save(ep: EmissionPoint): Promise<void>;
 }
 

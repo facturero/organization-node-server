@@ -22,6 +22,8 @@ export class ListEmissionPointsUseCase {
       code: ep.code,
       name: ep.name,
       status: ep.status,
+      type: ep.type,
+      paired: ep.isPaired(),
     }));
   }
 }

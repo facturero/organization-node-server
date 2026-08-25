@@ -64,6 +64,10 @@ function toEmissionPoint(m: EmissionPointModel): EmissionPoint {
     code: m.code,
     name: m.name,
     status: m.status,
+    type: m.type,
+    totpSecret: m.totp_secret,
+    pairedAt: m.paired_at,
+    pairedDeviceId: m.paired_device_id,
     createdAt: m.created_at,
     updatedAt: m.updated_at,
   });
@@ -178,6 +182,13 @@ function emissionPointRepository(tx?: Transaction): EmissionPointRepository {
       const max = rows.reduce((m, r) => Math.max(m, parseInt(r.code, 10) || 0), 0);
       return String(max + 1).padStart(3, '0');
     },
+    async listUnpairedPosPoints() {
+      const rows = await EmissionPointModel.findAll({
+        where: { type: 'pos', status: 'active', paired_at: null },
+        transaction: tx,
+      });
+      return rows.map(toEmissionPoint);
+    },
     async save(ep) {
       const p = ep.toPersistence();
       await EmissionPointModel.upsert(
@@ -188,6 +199,10 @@ function emissionPointRepository(tx?: Transaction): EmissionPointRepository {
           code: p.code,
           name: p.name,
           status: p.status,
+          type: p.type,
+          totp_secret: p.totpSecret,
+          paired_at: p.pairedAt,
+          paired_device_id: p.pairedDeviceId,
           created_at: p.createdAt,
           updated_at: new Date(),
         },
