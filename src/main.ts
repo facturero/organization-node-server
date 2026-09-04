@@ -17,7 +17,7 @@ import { GetPairingCodeUseCase } from './application/use-cases/get-pairing-code'
 import { PairPosTerminalUseCase } from './application/use-cases/pair-pos-terminal';
 import { UnlinkEmissionPointUseCase } from './application/use-cases/unlink-emission-point';
 import { HttpServiceAccountProvisioner } from './infrastructure/auth-client';
-import { OutboxRelay } from './infrastructure/messaging/relay';
+import { OutboxRelay } from '@facturero/outbox-relay';
 import { createApp } from './interface/http/app';
 
 async function main(): Promise<void> {
@@ -51,8 +51,12 @@ async function main(): Promise<void> {
   });
 
   if (config.RABBITMQ_URL) {
-    const relay = new OutboxRelay();
-    await relay.start(config.RABBITMQ_URL);
+    const relay = new OutboxRelay({
+      sequelize,
+      rabbitmqUrl: config.RABBITMQ_URL,
+      exchange: 'crm.events',
+    });
+    await relay.start();
     console.log('[messaging] outbox relay iniciado');
   }
 
