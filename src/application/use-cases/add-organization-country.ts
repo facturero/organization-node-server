@@ -30,6 +30,20 @@ export class AddOrganizationCountryUseCase {
       });
       await repos.organizationCountries.save(oc);
 
+      // Habilitar un país cambia la configuración fiscal de la organización:
+      // es de las cosas que una auditoría tiene que poder reconstruir.
+      await repos.outbox.add({
+        type: 'organization.country.added',
+        aggregateType: 'organization_country',
+        aggregateId: oc.id,
+        payload: {
+          organizationId: oc.organizationId,
+          countryCode: oc.countryCode,
+          enabled: oc.enabled,
+        },
+        occurredAt: new Date(),
+      });
+
       return {
         id: oc.id,
         organizationId: oc.organizationId,

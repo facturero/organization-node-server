@@ -23,6 +23,23 @@ export class UpdateEstablishmentUseCase {
       });
       await repos.establishments.save(est);
 
+      // El alta ya emitía `organization.establishment.created`; la edición no
+      // emitía nada, así que cambiar nombre, dirección o estado de un
+      // establecimiento no dejaba rastro en la bitácora.
+      await repos.outbox.add({
+        type: 'organization.establishment.updated',
+        aggregateType: 'establishment',
+        aggregateId: est.id,
+        payload: {
+          organizationId: est.organizationId,
+          establishmentId: est.id,
+          code: est.code,
+          countryCode: est.countryCode,
+          status: est.status,
+        },
+        occurredAt: new Date(),
+      });
+
       return {
         id: est.id,
         organizationId: est.organizationId,
