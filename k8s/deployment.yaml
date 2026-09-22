@@ -100,6 +100,10 @@ spec:
                 secretKeyRef:
                   name: internal-service-secret
                   key: value
+            - name: OTEL_SERVICE_NAME
+              value: "organization-service"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4318"
           resources:
             requests:
               memory: "128Mi"
