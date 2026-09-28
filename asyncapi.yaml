@@ -60,6 +60,20 @@ channels:
     messages:
       billingPointCreated: { $ref: '#/components/messages/BillingPointCreated' }
 
+  posThemeChanged:
+    address: organization.pos_theme.changed
+    description: >-
+      Cambió un tema del POS: se creó, se editó, pasó a predeterminado, se asignó a
+      una caja o se quitó de ella. Lo consume api-gateway-node para empujar el tema a
+      las cajas por WebSocket.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      posThemeChanged: { $ref: '#/components/messages/PosThemeChanged' }
+
   taxCountryEnabled:
     address: tax.country.enabled
     description: (Consumido) tax-service habilitó un país; alimenta el read-model `countries`.
@@ -86,6 +100,14 @@ operations:
     action: send
     channel: { $ref: '#/channels/billingPointCreated' }
     summary: Emite organization.billing_point.created (billing inicializa el secuencial).
+
+  publishPosThemeChanged:
+    action: send
+    channel: { $ref: '#/channels/posThemeChanged' }
+    summary: >-
+      Emite organization.pos_theme.changed. El gateway lo reenvía por WebSocket solo a
+      las cajas afectadas: si affectedEmissionPointIds es la cadena "all", a todas las
+      de la organización.
 
   consumeTaxCountryEnabled:
     action: receive
@@ -122,6 +144,12 @@ components:
       contentType: application/json
       traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
       payload: { $ref: '#/components/schemas/BillingPointCreatedPayload' }
+    PosThemeChanged:
+      name: organization.pos_theme.changed
+      title: Tema del POS cambiado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/PosThemeChangedPayload' }
     TaxCountryEnabled:
       name: tax.country.enabled
       title: País habilitado (consumido)
@@ -162,3 +190,35 @@ components:
         countryCode: { type: string, example: EC }
         name: { type: string, nullable: true, example: Ecuador }
         currencyCode: { type: string, nullable: true, example: USD }
+    PosThemeChangedPayload:
+      type: object
+      required: [organizationId, themeId, affectedEmissionPointIds, affectedDeviceIds]
+      properties:
+        organizationId: { type: string, format: uuid }
+        themeId:
+          type: string
+          nullable: true
+          description: >-
+            Tema afectado. `null` cuando lo que cambió fue una asignación: se quitó el
+            override de una caja y esa caja vuelve al predeterminado de la organización.
+        affectedEmissionPointIds:
+          description: >-
+            Cajas que tienen que recargar. La cadena "all" cuando lo que cambió es el
+            tema predeterminado de la organización o el tema de una organización sin
+            cajas con override: en ese caso el gateway tiene que resolver y filtrar
+            él, porque una lista vacía significaría "nadie".
+          oneOf:
+            - type: string
+              enum: ['all']
+            - type: array
+              items: { type: string, format: uuid }
+        affectedDeviceIds:
+          type: array
+          items: { type: string }
+          description: >-
+            Los mismos puntos pero como deviceId, que es lo que el gateway usa para
+            enrutar al socket (sala `device:<deviceId>`). Es la sala de un POS la de su
+            dispositivo, no la de su punto de emisión, y el JWT del POS no lleva claim
+            de punto de emisión: sin este campo el aviso no llegaría a ninguna caja.
+            Solo incluye puntos emparejados, y va vacío cuando affectedEmissionPointIds
+            es "all" (el gateway avisa entonces a la sala de la organización).

@@ -12,29 +12,48 @@ import { AddOrganizationCountryUseCase } from '../../application/use-cases/add-o
 import { GetPairingCodeUseCase } from '../../application/use-cases/get-pairing-code';
 import { PairPosTerminalUseCase } from '../../application/use-cases/pair-pos-terminal';
 import { UnlinkEmissionPointUseCase } from '../../application/use-cases/unlink-emission-point';
+import { ListPosThemesUseCase } from '../../application/use-cases/list-pos-themes';
+import { CreatePosThemeUseCase } from '../../application/use-cases/create-pos-theme';
+import { GetPosThemeUseCase } from '../../application/use-cases/get-pos-theme';
+import { UpdatePosThemeUseCase } from '../../application/use-cases/update-pos-theme';
+import { DeletePosThemeUseCase } from '../../application/use-cases/delete-pos-theme';
+import { MakeDefaultPosThemeUseCase } from '../../application/use-cases/make-default-pos-theme';
+import { AssignPosThemeToPointUseCase } from '../../application/use-cases/assign-pos-theme-to-point';
+import { ResolvePosThemeUseCase } from '../../application/use-cases/resolve-pos-theme';
 import {
   addCountrySchema,
+  assignPosThemeSchema,
   createEmissionPointSchema,
   createEstablishmentSchema,
+  createPosThemeSchema,
   pairPosTerminalSchema,
   updateEstablishmentSchema,
   updateOrganizationSchema,
+  updatePosThemeSchema,
   upsertOrganizationSchema,
   validateJson,
 } from './validators';
 import {
   addOrganizationCountryController,
+  assignPosThemeToPointController,
   createEmissionPointController,
   createEstablishmentController,
+  createPosThemeController,
+  deletePosThemeController,
   getMyOrganizationController,
   getPairingCodeController,
+  getPosThemeController,
   listEmissionPointsController,
   listEstablishmentsController,
   listOrganizationCountriesController,
+  listPosThemesController,
+  makeDefaultPosThemeController,
   pairPosTerminalController,
+  resolvePosThemeController,
   unlinkEmissionPointController,
   updateEstablishmentController,
   updateOrganizationController,
+  updatePosThemeController,
   upsertOrganizationController,
 } from './controllers';
 import { ContextVariables, requireOrganization, requirePermission } from './middlewares';
@@ -56,6 +75,14 @@ export interface AppDependencies {
     unlinkEmissionPoint: UnlinkEmissionPointUseCase;
     listOrganizationCountries: ListOrganizationCountriesUseCase;
     addOrganizationCountry: AddOrganizationCountryUseCase;
+    listPosThemes: ListPosThemesUseCase;
+    createPosTheme: CreatePosThemeUseCase;
+    getPosTheme: GetPosThemeUseCase;
+    updatePosTheme: UpdatePosThemeUseCase;
+    deletePosTheme: DeletePosThemeUseCase;
+    makeDefaultPosTheme: MakeDefaultPosThemeUseCase;
+    assignPosThemeToPoint: AssignPosThemeToPointUseCase;
+    resolvePosTheme: ResolvePosThemeUseCase;
   };
   corsOrigin: string;
 }
@@ -97,6 +124,41 @@ export function organizationRoutes(deps: AppDependencies): Hono<Vars> {
     requirePermission('organization:admin'),
     validateJson(addCountrySchema),
     addOrganizationCountryController(useCases.addOrganizationCountry));
+
+  /* Biblioteca de temas del POS. Los permisos son de organización (no de
+   * establecimiento) porque un tema es de toda la organización: es lo que
+   * permite que "todas mis cajas juntas" cambie en un solo sitio. */
+  r.get('/organizations/me/pos-themes',
+    requireOrganization(),
+    requirePermission('organization:read'),
+    listPosThemesController(useCases.listPosThemes));
+
+  r.post('/organizations/me/pos-themes',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(createPosThemeSchema),
+    createPosThemeController(useCases.createPosTheme));
+
+  r.get('/organizations/me/pos-themes/:themeId',
+    requireOrganization(),
+    requirePermission('organization:read'),
+    getPosThemeController(useCases.getPosTheme));
+
+  r.put('/organizations/me/pos-themes/:themeId',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(updatePosThemeSchema),
+    updatePosThemeController(useCases.updatePosTheme));
+
+  r.delete('/organizations/me/pos-themes/:themeId',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    deletePosThemeController(useCases.deletePosTheme));
+
+  r.post('/organizations/me/pos-themes/:themeId/make-default',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    makeDefaultPosThemeController(useCases.makeDefaultPosTheme));
 
   return r;
 }
@@ -142,6 +204,20 @@ export function establishmentRoutes(deps: AppDependencies): Hono<Vars> {
     requireOrganization(),
     requirePermission('establishment:update'),
     unlinkEmissionPointController(useCases.unlinkEmissionPoint));
+
+  /* Tema efectivo de UNA caja. El `PUT` es para el CRM (asignar o quitar el
+   * override, `themeId: null` = volver al predeterminado) y el `GET` es el que
+   * consume el POS en cada arranque y en cada aviso por socket. */
+  r.put('/establishments/:id/billing-points/:pointId/theme',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(assignPosThemeSchema),
+    assignPosThemeToPointController(useCases.assignPosThemeToPoint));
+
+  r.get('/establishments/:id/billing-points/:pointId/theme',
+    requireOrganization(),
+    requirePermission('organization:read'),
+    resolvePosThemeController(useCases.resolvePosTheme));
 
   return r;
 }

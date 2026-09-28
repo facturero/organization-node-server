@@ -7,11 +7,16 @@ export abstract class AppError extends Error {
   abstract readonly code: string;
   abstract readonly httpStatus: number;
   readonly details?: ErrorDetail[];
+  /** Campos extra que el error necesita en la respuesta además de code/message
+   * (por ejemplo `pairs` en LOW_CONTRAST o `assignedPointsCount` en el 409 de
+   * borrar un tema en uso). El errorHandler los copia tal cual al JSON. */
+  readonly extra?: Record<string, unknown>;
 
-  constructor(message: string, details?: ErrorDetail[]) {
+  constructor(message: string, details?: ErrorDetail[], extra?: Record<string, unknown>) {
     super(message);
     this.name = new.target.name;
     this.details = details;
+    this.extra = extra;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
@@ -106,4 +111,58 @@ export class ServiceProvisioningError extends AppError {
   readonly code = 'SERVICE_PROVISIONING_FAILED';
   readonly httpStatus = 502;
   constructor(message = 'No se pudo aprovisionar las credenciales del terminal.') { super(message); }
+}
+
+export class PosThemeNotFoundError extends AppError {
+  readonly code = 'POS_THEME_NOT_FOUND';
+  readonly httpStatus = 404;
+  constructor(message = 'Tema del POS no encontrado.') { super(message); }
+}
+
+export class PosThemeNameAlreadyExistsError extends AppError {
+  readonly code = 'POS_THEME_NAME_EXISTS';
+  readonly httpStatus = 409;
+  constructor(message = 'Ya existe un tema con ese nombre en la organización.') { super(message); }
+}
+
+/** El default no se puede borrar: sin él, las cajas que no tienen override se
+ * quedarían sin tema configurado (caerían al integrado, que no es lo que el
+ * dueño quiere al borrar algo). */
+export class CannotDeleteDefaultPosThemeError extends AppError {
+  readonly code = 'POS_THEME_IS_DEFAULT';
+  readonly httpStatus = 409;
+  constructor(message = 'No se puede borrar el tema predeterminado.') { super(message); }
+}
+
+export class PosThemeInUseError extends AppError {
+  readonly code = 'POS_THEME_IN_USE';
+  readonly httpStatus = 409;
+  constructor(public readonly assignedPointsCount: number) {
+    super(
+      'No se puede borrar un tema que tienen asignado uno o más puntos de emisión.',
+      undefined,
+      { assignedPointsCount },
+    );
+  }
+}
+
+/** El contraste bajo no es una manía estética: una caja con texto ilegible
+ * pierde ventas. Se rechaza en el servidor (no solo avisa en el editor) porque
+ * el editor es una de las formas de entrar al sistema, no la única. */
+export class LowContrastPosThemeError extends AppError {
+  readonly code = 'LOW_CONTRAST';
+  readonly httpStatus = 422;
+  constructor(public readonly pairs: ReadonlyArray<{ a: string; b: string; ratio: number; min: number }>) {
+    super(
+      'El contraste del tema es demasiado bajo para poder leerlo en la caja.',
+      undefined,
+      { pairs },
+    );
+  }
+}
+
+export class PosThemeTooLargeError extends AppError {
+  readonly code = 'POS_THEME_TOO_LARGE';
+  readonly httpStatus = 422;
+  constructor(message = 'El tema supera el tamaño máximo permitido.') { super(message); }
 }

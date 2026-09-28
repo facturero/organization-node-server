@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { POS_THEME_SCHEMA_VERSION, PosThemeConfig } from './pos-theme';
 
 export type OrganizationStatus = 'active' | 'suspended';
 export type EstablishmentsStatus = 'active' | 'inactive';
@@ -170,6 +171,9 @@ export interface EmissionPointProps {
   /** UUID del dispositivo POS (deviceId) que se emparejó; sirve para enrutar
    * la desvinculación por socket.io al terminal exacto. */
   pairedDeviceId: string | null;
+  /** Tema del POS que overridea el de la organización. `null` = hereda el
+   * predeterminado de la org (y si la org no tiene, el tema integrado). */
+  posThemeId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -198,6 +202,7 @@ export class EmissionPoint {
       totpSecret: params.totpSecret ?? null,
       pairedAt: null,
       pairedDeviceId: null,
+      posThemeId: null,
       createdAt: now,
       updatedAt: now,
     });
@@ -217,6 +222,7 @@ export class EmissionPoint {
   get totpSecret(): string | null { return this.props.totpSecret; }
   get pairedAt(): Date | null { return this.props.pairedAt; }
   get pairedDeviceId(): string | null { return this.props.pairedDeviceId; }
+  get posThemeId(): string | null { return this.props.posThemeId; }
   get createdAt(): Date { return this.props.createdAt; }
 
   isPaired(): boolean {
@@ -225,6 +231,13 @@ export class EmissionPoint {
 
   isPosTerminal(): boolean {
     return this.props.type === 'pos';
+  }
+
+  /** Asigna o quita el tema propio de esta caja. `null` devuelve la caja al
+   * tema predeterminado de la organización. */
+  setPosTheme(themeId: string | null): void {
+    this.props.posThemeId = themeId;
+    this.props.updatedAt = new Date();
   }
 
   markPaired(deviceId: string): void {
@@ -280,6 +293,91 @@ export class OrganizationCountry {
   get enabled(): boolean { return this.props.enabled; }
 
   toPersistence(): OrganizationCountryProps {
+    return { ...this.props };
+  }
+}
+
+export interface PosThemeProps {
+  id: string;
+  organizationId: string;
+  name: string;
+  config: PosThemeConfig;
+  schemaVersion: number;
+  /** Sube en cada `PUT`. Es lo que el POS compara (vía el ETag) para saber si
+   * su copia local está al día sin descargar el JSON entero. */
+  version: number;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class PosTheme {
+  private constructor(private props: PosThemeProps) {}
+
+  static create(params: {
+    organizationId: string;
+    name: string;
+    config: PosThemeConfig;
+    isDefault?: boolean;
+  }): PosTheme {
+    const now = new Date();
+    return new PosTheme({
+      id: randomUUID(),
+      organizationId: params.organizationId,
+      name: params.name,
+      config: params.config,
+      schemaVersion: POS_THEME_SCHEMA_VERSION,
+      version: 1,
+      isDefault: params.isDefault ?? false,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  static fromPersistence(props: PosThemeProps): PosTheme {
+    return new PosTheme({ ...props });
+  }
+
+  get id(): string { return this.props.id; }
+  get organizationId(): string { return this.props.organizationId; }
+  get name(): string { return this.props.name; }
+  get config(): PosThemeConfig { return this.props.config; }
+  get schemaVersion(): number { return this.props.schemaVersion; }
+  get version(): number { return this.props.version; }
+  get isDefault(): boolean { return this.props.isDefault; }
+  get createdAt(): Date { return this.props.createdAt; }
+  get updatedAt(): Date { return this.props.updatedAt; }
+
+  belongsToOrganization(organizationId: string): boolean {
+    return this.props.organizationId === organizationId;
+  }
+
+  rename(name: string): void {
+    this.props.name = name;
+    this.props.updatedAt = new Date();
+  }
+
+  /** El `PUT` reemplaza el config entero (no es un merge): así el editor y la
+   * caja ven exactamente lo que el dueño guardó, y quitar un token no se
+   * confunde con dejarlo como estaba. */
+  replaceConfig(config: PosThemeConfig): void {
+    this.props.config = config;
+    this.props.schemaVersion = POS_THEME_SCHEMA_VERSION;
+    this.props.version += 1;
+    this.props.updatedAt = new Date();
+  }
+
+  makeDefault(): void {
+    this.props.isDefault = true;
+    this.props.updatedAt = new Date();
+  }
+
+  removeDefault(): void {
+    this.props.isDefault = false;
+    this.props.updatedAt = new Date();
+  }
+
+  toPersistence(): PosThemeProps {
     return { ...this.props };
   }
 }

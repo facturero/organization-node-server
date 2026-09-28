@@ -1,5 +1,6 @@
 import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
 import { sequelize } from './sequelize';
+import { PosThemeConfig } from '../../domain/pos-theme';
 
 export class OrganizationModel extends Model<
   InferAttributes<OrganizationModel>,
@@ -77,6 +78,7 @@ export class EmissionPointModel extends Model<
   declare totp_secret: string | null;
   declare paired_at: Date | null;
   declare paired_device_id: string | null;
+  declare pos_theme_id: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -93,10 +95,41 @@ EmissionPointModel.init(
     totp_secret: { type: DataTypes.STRING(64), allowNull: true },
     paired_at: { type: DataTypes.DATE, allowNull: true },
     paired_device_id: { type: DataTypes.CHAR(36), allowNull: true },
+    pos_theme_id: { type: DataTypes.CHAR(36), allowNull: true },
     created_at: DataTypes.DATE,
     updated_at: DataTypes.DATE,
   },
   { sequelize, tableName: 'emission_points', timestamps: false },
+);
+
+export class PosThemeModel extends Model<
+  InferAttributes<PosThemeModel>,
+  InferCreationAttributes<PosThemeModel>
+> {
+  declare id: string;
+  declare organization_id: string;
+  declare name: string;
+  declare config: PosThemeConfig;
+  declare schema_version: number;
+  declare version: number;
+  declare is_default: boolean;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+PosThemeModel.init(
+  {
+    id: { type: DataTypes.CHAR(36), primaryKey: true },
+    organization_id: { type: DataTypes.CHAR(36), allowNull: false },
+    name: { type: DataTypes.STRING(80), allowNull: false },
+    config: { type: DataTypes.JSON, allowNull: false },
+    schema_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+    is_default: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    created_at: DataTypes.DATE,
+    updated_at: DataTypes.DATE,
+  },
+  { sequelize, tableName: 'pos_themes', timestamps: false },
 );
 
 export class OrganizationCountryModel extends Model<
@@ -174,3 +207,12 @@ EstablishmentModel.hasMany(EmissionPointModel, { foreignKey: 'establishment_id' 
 EmissionPointModel.belongsTo(EstablishmentModel, { foreignKey: 'establishment_id' });
 OrganizationModel.hasMany(OrganizationCountryModel, { foreignKey: 'organization_id' });
 OrganizationCountryModel.belongsTo(OrganizationModel, { foreignKey: 'organization_id' });
+OrganizationModel.hasMany(PosThemeModel, { foreignKey: 'organization_id' });
+PosThemeModel.belongsTo(OrganizationModel, { foreignKey: 'organization_id' });
+// Sin `constraints` porque la FK real la crea la migración (ver
+// migrations/20260928090100-add-pos-theme-to-emission-points.js); aquí solo
+// se declara la relación para poder leer `posThemeId` desde el punto.
+EmissionPointModel.belongsTo(PosThemeModel, {
+  foreignKey: 'pos_theme_id',
+  constraints: false,
+});

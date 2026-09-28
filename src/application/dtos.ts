@@ -1,3 +1,5 @@
+import { PosThemeAsset, PosThemeConfig } from '../domain/pos-theme';
+
 export interface OrganizationDTO {
   id: string;
   legalName: string | null;
@@ -29,6 +31,11 @@ export interface EmissionPointDTO {
   status: 'active' | 'inactive';
   type: 'web' | 'pos';
   paired: boolean;
+  /** Tema propio de esta caja. `null` = hereda el predeterminado de la org. */
+  posThemeId?: string | null;
+  /** Nombre del tema efectivo (el override, o el predeterminado de la org).
+   * Va para que el CRM muestre "qué tema tiene esta caja" sin otra llamada. */
+  posThemeName?: string | null;
 }
 
 export interface OrganizationCountryDTO {
@@ -101,6 +108,45 @@ export interface AddOrganizationCountryInput {
   countryCode: string;
 }
 
+/* ------------------------------------------------------------------ *
+ * Temas del POS
+ * ------------------------------------------------------------------ */
+
+export interface PosThemeSummaryDTO {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  version: number;
+  updatedAt: string;
+  /** Cuántos puntos de emisión tienen este tema asignado. El editor lo usa
+   * para no ofrecer borrar lo que está en uso. */
+  assignedPointsCount: number;
+}
+
+export interface PosThemeDTO {
+  id: string;
+  organizationId: string;
+  name: string;
+  isDefault: boolean;
+  version: number;
+  schemaVersion: number;
+  config: PosThemeConfig;
+  updatedAt: string;
+}
+
+export interface ResolvedPosThemeDTO {
+  source: 'point' | 'default' | 'builtin';
+  themeId: string | null;
+  name: string;
+  version: number;
+  etag: string;
+  schemaVersion: number;
+  /** `null` cuando `source` es "builtin": el POS aplica su tema integrado, que
+   * no necesita que nadie se lo mande. */
+  config: PosThemeConfig | null;
+  assets: PosThemeAsset[];
+}
+
 export function toOrganizationDTO(org: OrganizationDTO): OrganizationDTO {
   return org;
 }
@@ -131,8 +177,7 @@ export function toEmissionPointDTO(ep: {
   return { ...ep };
 }
 
-export function toOrganizationCountryDTO(oc: {
-  id: string;
+export function toOrganizationCountryDTO(oc: {  id: string;
   organizationId: string;
   countryCode: string;
   enabled: boolean;

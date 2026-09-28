@@ -80,6 +80,7 @@ export function errorHandler(err: Error, c: Context): Response {
         code: err.code,
         message: err.message,
         ...(err.details ? { details: err.details } : {}),
+        ...(err.extra ?? {}),
       },
       err.httpStatus as 400,
     );

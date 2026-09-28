@@ -24,6 +24,7 @@ tags:
   - name: organization
   - name: establishments
   - name: countries
+  - name: pos-themes
 
 paths:
   /health:
@@ -267,6 +268,198 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
       x-required-permission: establishment:create
 
+  /organizations/me/pos-themes:
+    get:
+      tags: [pos-themes]
+      summary: Listar los temas de la organización
+      description: >
+        Devuelve el resumen de cada tema, sin el `config`: la lista son unas decenas
+        de filas y el config pesa ~1 KB. Para el color hay que pedir el detalle.
+        `assignedPointsCount` viene para que el CRM no ofrezca borrar lo que está en uso.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PosThemeSummary' } }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+      x-required-permission: organization:read
+    post:
+      tags: [pos-themes]
+      summary: Crear un tema
+      description: >
+        El PRIMER tema de la organización se marca predeterminado automáticamente. Los
+        siguientes se crean sin predeterminado y sin publicar evento, porque ninguna caja
+        los está usando todavía. Devuelve `422` con código LOW_CONTRAST si alguna pareja
+        de colores queda por debajo de 3:1, diciendo cuáles y con qué ratio.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePosThemeRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PosTheme' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Ya existe un tema con ese nombre en la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+
+  /organizations/me/pos-themes/{themeId}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgHeader' }
+      - { name: themeId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [pos-themes]
+      summary: Detalle de un tema (incluye el config)
+      responses:
+        '200':
+          description: Tema
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PosTheme' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ThemeNotFound' }
+      x-required-permission: organization:read
+    put:
+      tags: [pos-themes]
+      summary: Guardar un tema
+      description: >
+        Guarda el config entero y sube la versión. Publica
+        `organization.pos_theme.changed` con la lista de cajas que tienen este tema
+        asignado; si el tema es el predeterminado, esa lista es la cadena `all`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePosThemeRequest' }
+      responses:
+        '200':
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PosTheme' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ThemeNotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+    delete:
+      tags: [pos-themes]
+      summary: Borrar un tema
+      description: >
+        No se borra el predeterminado (`409 POS_THEME_IS_DEFAULT`) ni uno en uso
+        (`409 POS_THEME_IN_USE`, con `assignedPointsCount`).
+      responses:
+        '204': { description: Borrado }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ThemeNotFound' }
+        '409':
+          description: Es el predeterminado, o hay cajas usándolo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: organization:admin
+
+  /organizations/me/pos-themes/{themeId}/make-default:
+    parameters:
+      - { $ref: '#/components/parameters/OrgHeader' }
+      - { name: themeId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [pos-themes]
+      summary: Convertir un tema en el predeterminado de la organización
+      description: >
+        Deja el predeterminado anterior como un tema normal, en la misma transacción.
+        Publica `organization.pos_theme.changed` con `affectedEmissionPointIds: "all"`,
+        porque ahora afecta a toda caja que no tenga override propio.
+      responses:
+        '200':
+          description: Tema, ya como predeterminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PosThemeSummary' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/ThemeNotFound' }
+      x-required-permission: organization:admin
+
+  /establishments/{id}/billing-points/{pointId}/theme:
+    parameters:
+      - { $ref: '#/components/parameters/OrgHeader' }
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: pointId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [pos-themes]
+      summary: Tema efectivo de una caja
+      description: >
+        Resuelve la cadena completa y devuelve el resultado con su `ETag`: override de
+        la caja, predeterminado de la organización, o tema integrado del POS
+        (`source: "builtin"` con `config: null`). Responde `304` si el `If-None-Match`
+        que llega coincide, para que una caja que consulta a menudo no descargue el JSON.
+
+        Es la única ruta de este grupo que lee con `organization:read` y no con
+        `organization:admin`: la consulta la hace la propia caja, no un usuario.
+      responses:
+        '200':
+          description: Tema efectivo
+          headers:
+            ETag:
+              description: '"<themeId>-<version>", o "builtin-0" con el tema integrado.'
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResolvedPosTheme' }
+        '304': { description: Sin cambios }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Establecimiento o punto no encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: organization:read
+    put:
+      tags: [pos-themes]
+      summary: Asignar (o quitar) el tema propio de una caja
+      description: >
+        `themeId: null` devuelve la caja al predeterminado de la organización. Solo
+        puntos `type: "pos"`; para un punto web sale `422 EMISSION_POINT_NOT_POS`.
+        Publica el evento solo a esa caja, con `themeId` a `null` cuando lo que cambió
+        fue quitar el override.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AssignPosThemeRequest' }
+      responses:
+        '200':
+          description: Punto actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmissionPoint' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Establecimiento, punto o tema no encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+
 components:
   parameters:
     OrgHeader:
@@ -308,6 +501,19 @@ components:
         code: { type: string, example: "001" }
         name: { type: string, nullable: true }
         status: { type: string, enum: [active, inactive] }
+        type: { type: string, enum: [web, pos] }
+        paired: { type: boolean }
+        posThemeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Tema propio de la caja; `null` = hereda el predeterminado de la organización.
+        posThemeName:
+          type: string
+          nullable: true
+          description: >
+            Nombre del tema efectivo (el override, o el predeterminado de la organización).
+            Va aquí para que el CRM muestre "qué tema tiene esta caja" sin otra llamada.
     OrganizationCountry:
       type: object
       properties:
@@ -351,6 +557,200 @@ components:
       required: [countryCode]
       properties:
         countryCode: { type: string, minLength: 2, maxLength: 2 }
+
+    # Temas del POS.
+    #
+    # El config es un objeto CERRADO: sin `additionalProperties` en ningún nivel.
+    # Es deliberado, no un descuido — el POS es un kiosco y este JSON se aplica en
+    # la caja. Lo que el servidor no conoce no lo sabe pintar nadie, y admitir un
+    # `css` libre convertiría la pantalla de cobro en un intérprete de lo que
+    # mande quien tenga organization:admin.
+    PosThemeColorSet:
+      type: object
+      additionalProperties: false
+      required: [primary, background, surface, surfaceAlt, text, textMuted, border, success, warning, danger]
+      properties:
+        primary: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#2563eb' }
+        background: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#f9fafb' }
+        surface: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#ffffff' }
+        surfaceAlt: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#f3f4f6' }
+        text: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#1f2937' }
+        textMuted: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#6b7280' }
+        border: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#e5e7eb' }
+        success: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#059669' }
+        warning: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#b45309' }
+        danger: { type: string, pattern: '^#[0-9a-f]{6}$', example: '#dc2626' }
+    PosThemeLoginBackground:
+      description: >
+        Unión de dos variantes, no un objeto con `type` y campos opcionales: un fondo
+        de tipo imagen sin `imageFileId` no tiene sentido, y con la unión el
+        compilador obliga a que `imageFileId` solo exista en la variante que lo usa.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [type, color, imageFileId]
+          properties:
+            type: { type: string, enum: [color] }
+            color: { type: string, pattern: '^#[0-9a-f]{6}$', nullable: true }
+            imageFileId: { type: string, enum: [null] }
+        - type: object
+          additionalProperties: false
+          required: [type, color, imageFileId]
+          properties:
+            type: { type: string, enum: [image] }
+            color: { type: string, enum: [null] }
+            imageFileId: { type: string, format: uuid }
+    PosThemeConfig:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, mode, allowCashierToggle, schedule, colors, typography, shape, layout, branding]
+      properties:
+        schemaVersion:
+          type: integer
+          enum: [1]
+          description: Se incrementa solo cuando se añade un campo. Un POS con una versión antigua ignora lo que no conoce.
+        mode: { type: string, enum: [light, dark, schedule], description: '`schedule` usa `schedule.darkFrom`/`darkTo`.' }
+        allowCashierToggle: { type: boolean, description: Si el cajero puede forzar claro/oscuro desde la caja. }
+        schedule:
+          type: object
+          additionalProperties: false
+          required: [darkFrom, darkTo]
+          properties:
+            darkFrom: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '19:00' }
+            darkTo: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$', example: '06:00' }
+        colors:
+          type: object
+          additionalProperties: false
+          required: [light, dark]
+          description: 'Se mandan los dos modos aunque solo se use uno: cambiar a `schedule` no debe obligar a editar.'
+          properties:
+            light: { $ref: '#/components/schemas/PosThemeColorSet' }
+            dark: { $ref: '#/components/schemas/PosThemeColorSet' }
+        typography:
+          type: object
+          additionalProperties: false
+          required: [fontFamily, baseSize, headingWeight]
+          properties:
+            fontFamily:
+              type: string
+              enum: [system, inter, roboto, poppins, nunito, montserrat, source-sans, jetbrains-mono]
+              description: 'Lista cerrada. Una fuente arbitraria o una URL arbitraria no: el POS no descarga nada.'
+            baseSize: { type: integer, minimum: 14, maximum: 20, example: 16 }
+            headingWeight: { type: integer, enum: [500, 600, 700] }
+        shape:
+          type: object
+          additionalProperties: false
+          required: [radius, density, shadows, borderWidth]
+          properties:
+            radius: { type: string, enum: [none, sm, md, lg, xl] }
+            density: { type: string, enum: [compact, comfortable, spacious] }
+            shadows: { type: boolean }
+            borderWidth: { type: integer, enum: [0, 1, 2] }
+        layout:
+          type: object
+          additionalProperties: false
+          required: [cartPosition, cartWidth, catalogColumns, productCard, categoriesPlacement, statusBarPosition, showProductImages]
+          properties:
+            cartPosition: { type: string, enum: [left, right] }
+            cartWidth: { type: string, enum: [narrow, normal, wide] }
+            catalogColumns:
+              description: '`auto` o un número fijo de 2 a 6: más daría tarjetas ilegibles en una pantalla de 800x480.'
+              oneOf: [{ type: string, enum: [auto] }, { type: integer, minimum: 2, maximum: 6 }]
+            productCard: { type: string, enum: [image-top, image-left, text-only, compact] }
+            categoriesPlacement: { type: string, enum: [top, left, hidden] }
+            statusBarPosition: { type: string, enum: [top, bottom] }
+            showProductImages: { type: boolean }
+        branding:
+          type: object
+          additionalProperties: false
+          required: [logoFileId, logoDarkFileId, logoPosition, logoSize, showLogoOnLogin, loginBackground, welcomeMessage]
+          description: Solo identificadores de archivo. El binario lo sirve document-service; el POS los baja por su cuenta.
+          properties:
+            logoFileId: { type: string, format: uuid, nullable: true }
+            logoDarkFileId: { type: string, format: uuid, nullable: true, description: Logo para modo oscuro; si es null se usa `logoFileId`. }
+            logoPosition: { type: string, enum: [left, right] }
+            logoSize: { type: string, enum: [sm, md, lg] }
+            showLogoOnLogin: { type: boolean }
+            loginBackground: { $ref: '#/components/schemas/PosThemeLoginBackground' }
+            welcomeMessage: { type: string, maxLength: 80, nullable: true }
+    PosThemeSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        isDefault: { type: boolean }
+        version: { type: integer, description: Sube en cada guardado; es la mitad del ETag que ve el POS. }
+        assignedPointsCount: { type: integer, description: Cuántas cajas lo tienen asignado, para no ofrecer borrar lo que está en uso. }
+    PosTheme:
+      allOf:
+        - $ref: '#/components/schemas/PosThemeSummary'
+        - type: object
+          properties:
+            organizationId: { type: string, format: uuid }
+            schemaVersion: { type: integer, example: 1 }
+            config: { $ref: '#/components/schemas/PosThemeConfig' }
+            updatedAt: { type: string, format: date-time }
+    ResolvedPosTheme:
+      type: object
+      description: Lo que la caja tiene que pintar, ya resuelto.
+      properties:
+        source: { type: string, enum: [point, default, builtin] }
+        themeId: { type: string, format: uuid, nullable: true }
+        name: { type: string, example: POS KIOSKO }
+        version: { type: integer }
+        etag: { type: string, example: '"3f1c…-7"' }
+        schemaVersion: { type: integer }
+        config:
+          allOf: [{ $ref: '#/components/schemas/PosThemeConfig' }]
+          nullable: true
+          description: '`null` cuando `source` es `builtin`: la caja aplica su tema integrado y no necesita que nadie se lo mande.'
+        assets:
+          type: array
+          description: Solo los archivos que existen, para que la caja sepa qué tiene que bajarse.
+          items:
+            type: object
+            properties:
+              role: { type: string, enum: [logo, logoDark, loginBackground] }
+              fileId: { type: string, format: uuid }
+    CreatePosThemeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        config: { $ref: '#/components/schemas/PosThemeConfig' }
+    UpdatePosThemeRequest:
+      allOf: [{ $ref: '#/components/schemas/CreatePosThemeRequest' }]
+    AssignPosThemeRequest:
+      type: object
+      additionalProperties: false
+      required: [themeId]
+      properties:
+        themeId:
+          type: string
+          format: uuid
+          nullable: true
+          description: '`null` devuelve la caja al predeterminado de la organización.'
+    LowContrastError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            pairs:
+              type: array
+              description: Las parejas que no llegan al mínimo, para que el editor marque el token culpable y no la caja entera.
+              items:
+                type: object
+                properties:
+                  a: { type: string, example: light.textMuted }
+                  b: { type: string, example: light.surface }
+                  ratio: { type: number, example: 1.42 }
+                  min: { type: number, example: 3 }
+      example:
+        code: LOW_CONTRAST
+        message: Alguna combinación de colores no es legible.
+        pairs: [{ a: light.textMuted, b: light.surface, ratio: 1.42, min: 3 }]
+
     Error:
       type: object
       required: [code, message]
@@ -384,3 +784,11 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
           example: { code: FORBIDDEN, message: Permiso insuficiente. }
+    ThemeNotFound:
+      description: >
+        El tema no existe, o es de otra organización. Se responde igual en los dos
+        casos: un 403 confirmaría que ese id existe.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { code: POS_THEME_NOT_FOUND, message: El tema no existe. }

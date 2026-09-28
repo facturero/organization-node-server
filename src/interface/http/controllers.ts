@@ -12,7 +12,16 @@ import { AddOrganizationCountryUseCase } from '../../application/use-cases/add-o
 import { GetPairingCodeUseCase } from '../../application/use-cases/get-pairing-code';
 import { PairPosTerminalUseCase } from '../../application/use-cases/pair-pos-terminal';
 import { UnlinkEmissionPointUseCase } from '../../application/use-cases/unlink-emission-point';
+import { ListPosThemesUseCase } from '../../application/use-cases/list-pos-themes';
+import { CreatePosThemeUseCase } from '../../application/use-cases/create-pos-theme';
+import { GetPosThemeUseCase } from '../../application/use-cases/get-pos-theme';
+import { UpdatePosThemeUseCase } from '../../application/use-cases/update-pos-theme';
+import { DeletePosThemeUseCase } from '../../application/use-cases/delete-pos-theme';
+import { MakeDefaultPosThemeUseCase } from '../../application/use-cases/make-default-pos-theme';
+import { AssignPosThemeToPointUseCase } from '../../application/use-cases/assign-pos-theme-to-point';
+import { ResolvePosThemeUseCase } from '../../application/use-cases/resolve-pos-theme';
 import { ContextVariables } from './middlewares';
+import { PosThemeConfig } from '../../domain/pos-theme';
 
 export function getMyOrganizationController(useCase: GetMyOrganizationUseCase) {
   return async (c: Context<{ Variables: ContextVariables }>) => {
@@ -186,5 +195,116 @@ export function addOrganizationCountryController(useCase: AddOrganizationCountry
       countryCode: body.countryCode,
     });
     return c.json(result, 201);
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Temas del POS
+ * ------------------------------------------------------------------ */
+
+export function listPosThemesController(useCase: ListPosThemesUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const result = await useCase.execute(orgId);
+    return c.json(result, 200);
+  };
+}
+
+export function createPosThemeController(useCase: CreatePosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const body = c.req.valid('json' as never) as { name: string; config: PosThemeConfig };
+    const result = await useCase.execute({
+      organizationId: orgId,
+      name: body.name,
+      config: body.config,
+    });
+    return c.json(result, 201);
+  };
+}
+
+export function getPosThemeController(useCase: GetPosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const themeId = c.req.param('themeId') ?? '';
+    const result = await useCase.execute(themeId, orgId);
+    return c.json(result, 200);
+  };
+}
+
+export function updatePosThemeController(useCase: UpdatePosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const themeId = c.req.param('themeId') ?? '';
+    const body = c.req.valid('json' as never) as { name: string; config: PosThemeConfig };
+    const result = await useCase.execute({
+      themeId,
+      organizationId: orgId,
+      name: body.name,
+      config: body.config,
+    });
+    return c.json(result, 200);
+  };
+}
+
+export function deletePosThemeController(useCase: DeletePosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const themeId = c.req.param('themeId') ?? '';
+    await useCase.execute({ themeId, organizationId: orgId });
+    return c.body(null, 204);
+  };
+}
+
+export function makeDefaultPosThemeController(useCase: MakeDefaultPosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const themeId = c.req.param('themeId') ?? '';
+    const result = await useCase.execute({ themeId, organizationId: orgId });
+    return c.json(result, 200);
+  };
+}
+
+export function assignPosThemeToPointController(useCase: AssignPosThemeToPointUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const estId = c.req.param('id') ?? '';
+    const pointId = c.req.param('pointId') ?? '';
+    const body = c.req.valid('json' as never) as { themeId: string | null };
+    const result = await useCase.execute({
+      establishmentId: estId,
+      emissionPointId: pointId,
+      organizationId: orgId,
+      themeId: body.themeId,
+    });
+    return c.json(result, 200);
+  };
+}
+
+/**
+ * Lo consume el POS. El ETag va en la cabecera (no en el cuerpo) porque es lo
+ * que se compara con `If-None-Match`: el POS lo manda en cada pull y en cada
+ * aviso, así que un pull sin cambios tiene que ser un 304 de verdad y no un
+ * 200 con el mismo JSON.
+ */
+export function resolvePosThemeController(useCase: ResolvePosThemeUseCase) {
+  return async (c: Context<{ Variables: ContextVariables }>) => {
+    const orgId = c.get('organizationId');
+    const estId = c.req.param('id') ?? '';
+    const pointId = c.req.param('pointId') ?? '';
+
+    const result = await useCase.execute({
+      establishmentId: estId,
+      emissionPointId: pointId,
+      organizationId: orgId,
+    });
+
+    c.header('ETag', result.etag);
+
+    if (c.req.header('If-None-Match') === result.etag) {
+      return c.body(null, 304);
+    }
+
+    return c.json(result, 200);
   };
 }

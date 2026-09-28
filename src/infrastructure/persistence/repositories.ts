@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Transaction } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { sequelize } from './sequelize';
 import {
   CountryModel,
@@ -8,12 +8,14 @@ import {
   OrganizationCountryModel,
   OrganizationModel,
   OutboxModel,
+  PosThemeModel,
 } from './models';
 import {
   Organization,
   Establishment,
   EmissionPoint,
   OrganizationCountry,
+  PosTheme,
 } from '../../domain/entities';
 import {
   CountryReadModelRepository,
@@ -23,10 +25,12 @@ import {
   OrganizationCountryRepository,
   OrganizationRepository,
   OutboxRepository,
+  PosThemeRepository,
   Repositories,
 } from '../../domain/repositories';
 import { UnitOfWork } from '../../application/ports';
 import { withActor } from '@facturero/outbox-relay';
+import { PosThemeConfig } from '../../domain/pos-theme';
 
 function toOrganization(m: OrganizationModel): Organization {
   return Organization.fromPersistence({
@@ -69,6 +73,21 @@ function toEmissionPoint(m: EmissionPointModel): EmissionPoint {
     totpSecret: m.totp_secret,
     pairedAt: m.paired_at,
     pairedDeviceId: m.paired_device_id,
+    posThemeId: m.pos_theme_id,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  });
+}
+
+function toPosTheme(m: PosThemeModel): PosTheme {
+  return PosTheme.fromPersistence({
+    id: m.id,
+    organizationId: m.organization_id,
+    name: m.name,
+    config: m.config as PosThemeConfig,
+    schemaVersion: m.schema_version,
+    version: m.version,
+    isDefault: m.is_default,
     createdAt: m.created_at,
     updatedAt: m.updated_at,
   });
@@ -173,6 +192,13 @@ function emissionPointRepository(tx?: Transaction): EmissionPointRepository {
       });
       return rows.map(toEmissionPoint);
     },
+    async listByOrganization(organizationId) {
+      const rows = await EmissionPointModel.findAll({
+        where: { organization_id: organizationId },
+        transaction: tx,
+      });
+      return rows.map(toEmissionPoint);
+    },
     async nextCode(establishmentId) {
       const rows = await EmissionPointModel.findAll({
         where: { establishment_id: establishmentId },
@@ -204,10 +230,70 @@ function emissionPointRepository(tx?: Transaction): EmissionPointRepository {
           totp_secret: p.totpSecret,
           paired_at: p.pairedAt,
           paired_device_id: p.pairedDeviceId,
+          pos_theme_id: p.posThemeId,
           created_at: p.createdAt,
           updated_at: new Date(),
         },
         { transaction: tx },
+      );
+    },
+  };
+}
+
+function posThemeRepository(tx?: Transaction): PosThemeRepository {
+  return {
+    async findById(id) {
+      const m = await PosThemeModel.findByPk(id, { transaction: tx });
+      return m ? toPosTheme(m) : null;
+    },
+    async listByOrganization(organizationId) {
+      const rows = await PosThemeModel.findAll({
+        where: { organization_id: organizationId },
+        // El predeterminado primero: es el que el CRM enseña arriba y el que el
+        // POS acaba resolviendo para la mayoría de las cajas.
+        order: [['is_default', 'DESC'], ['created_at', 'ASC']],
+        transaction: tx,
+      });
+      return rows.map(toPosTheme);
+    },
+    async findByName(organizationId, name) {
+      const m = await PosThemeModel.findOne({
+        where: { organization_id: organizationId, name },
+        transaction: tx,
+      });
+      return m ? toPosTheme(m) : null;
+    },
+    async findDefault(organizationId) {
+      const m = await PosThemeModel.findOne({
+        where: { organization_id: organizationId, is_default: true },
+        transaction: tx,
+      });
+      return m ? toPosTheme(m) : null;
+    },
+    async save(theme) {
+      const p = theme.toPersistence();
+      await PosThemeModel.upsert(
+        {
+          id: p.id,
+          organization_id: p.organizationId,
+          name: p.name,
+          config: p.config,
+          schema_version: p.schemaVersion,
+          version: p.version,
+          is_default: p.isDefault,
+          created_at: p.createdAt,
+          updated_at: new Date(),
+        },
+        { transaction: tx },
+      );
+    },
+    async remove(id) {
+      await PosThemeModel.destroy({ where: { id }, transaction: tx });
+    },
+    async clearDefaultExcept(organizationId, keepThemeId) {
+      await PosThemeModel.update(
+        { is_default: false },
+        { where: { organization_id: organizationId, id: { [Op.ne]: keepThemeId } }, transaction: tx },
       );
     },
   };
@@ -294,6 +380,7 @@ export function buildRepositories(tx?: Transaction): Repositories {
     emissionPoints: emissionPointRepository(tx),
     organizationCountries: organizationCountryRepository(tx),
     countries: countryReadModelRepository(tx),
+    posThemes: posThemeRepository(tx),
     outbox: outboxRepository(tx),
   };
 }

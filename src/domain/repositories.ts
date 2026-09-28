@@ -3,6 +3,7 @@ import {
   Establishment,
   EmissionPoint,
   OrganizationCountry,
+  PosTheme,
 } from './entities';
 
 export interface DomainEvent {
@@ -29,11 +30,27 @@ export interface EstablishmentRepository {
 export interface EmissionPointRepository {
   findById(id: string): Promise<EmissionPoint | null>;
   listByEstablishment(establishmentId: string): Promise<EmissionPoint[]>;
+  /** Puntos de emisión de toda la organización, para resolver/countar cuántos
+   * usan un tema. Se usa solo dentro de la organización del contexto. */
+  listByOrganization(organizationId: string): Promise<EmissionPoint[]>;
   nextCode(establishmentId: string): Promise<string>;
   /** Todos los puntos de emisión tipo 'pos' activos y sin emparejar (paired_at IS NULL),
    * de CUALQUIER organización — el POS todavía no sabe a qué org pertenece antes de emparejar. */
   listUnpairedPosPoints(): Promise<EmissionPoint[]>;
   save(ep: EmissionPoint): Promise<void>;
+}
+
+export interface PosThemeRepository {
+  findById(id: string): Promise<PosTheme | null>;
+  listByOrganization(organizationId: string): Promise<PosTheme[]>;
+  findByName(organizationId: string, name: string): Promise<PosTheme | null>;
+  findDefault(organizationId: string): Promise<PosTheme | null>;
+  save(theme: PosTheme): Promise<void>;
+  remove(id: string): Promise<void>;
+  /** Quita el flag `is_default` de todos los temas de la organización menos el
+   * indicado. MySQL no tiene índice único parcial, así que "un solo default"
+   * se aplica aquí, dentro de la transacción del caso de uso. */
+  clearDefaultExcept(organizationId: string, keepThemeId: string): Promise<void>;
 }
 
 export interface OrganizationCountryRepository {
@@ -57,5 +74,6 @@ export interface Repositories {
   emissionPoints: EmissionPointRepository;
   organizationCountries: OrganizationCountryRepository;
   countries: CountryReadModelRepository;
+  posThemes: PosThemeRepository;
   outbox: OutboxRepository;
 }

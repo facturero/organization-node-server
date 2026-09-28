@@ -60,6 +60,7 @@ describe('EmissionPoints', () => {
     const useCase = new ListEmissionPointsUseCase(
       repos.establishments,
       repos.emissionPoints,
+      repos.posThemes,
     );
 
     const result = await useCase.execute(est.id, 'org-1');
