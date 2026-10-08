@@ -15,9 +15,9 @@ import { findOwnedTheme } from './pos-theme-support';
  * - hay cajas asignadas → hay que quitarlo de esas cajas primero, y el error
  *   dice cuántas para que el CRM ofrezca hacerlo.
  *
- * No publica evento: si el tema no está en uso, no hay ninguna caja a la que
- * avisar. La FK `ON DELETE SET NULL` cubre el caso de que alguien se salte el
- * endpoint: las cajas volverían al predeterminado en su próximo pull.
+ * No avisa a las cajas: si el tema no está en uso, no hay ninguna a la que avisar (la FK
+ * `ON DELETE SET NULL` cubre el caso de que alguien se salte el endpoint: volverían al predeterminado en su próximo
+ * pull). Sí publica `organization.pos_theme.deleted`, pero solo para la bitácora de auditoría.
  */
 export class DeletePosThemeUseCase {
   constructor(private readonly uow: UnitOfWork) {}
@@ -37,6 +37,13 @@ export class DeletePosThemeUseCase {
       }
 
       await repos.posThemes.remove(theme.id);
+      await repos.outbox.add({
+        type: 'organization.pos_theme.deleted',
+        aggregateType: 'pos_theme',
+        aggregateId: theme.id,
+        payload: { targetId: theme.id, organizationId: input.organizationId, name: theme.name },
+        occurredAt: new Date(),
+      });
     });
   }
 }

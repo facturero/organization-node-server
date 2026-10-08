@@ -689,6 +689,31 @@ describe('Temas del POS · HTTP', () => {
       expect(await listThemes(app)).toHaveLength(1);
     });
 
+    it('crear y borrar un tema dejan su aviso para la bitácora (sin avisar a las cajas)', async () => {
+      const { app, repos } = createTestApp();
+      await createTheme(app, 'Clásico');
+      const segundo = await createTheme(app, 'Oscuro');
+
+      const creado = repos.events.filter((e) => e.type === 'organization.pos_theme.created');
+      expect(creado.map((e) => e.payload.name)).toEqual(['Clásico', 'Oscuro']);
+      expect(creado[1].payload).toMatchObject({ targetId: segundo.id, organizationId: 'org-1', isDefault: false });
+
+      await call(app, 'DELETE', `/organizations/me/pos-themes/${segundo.id}`);
+
+      const borrado = repos.events.filter((e) => e.type === 'organization.pos_theme.deleted');
+      expect(borrado).toHaveLength(1);
+      expect(borrado[0].payload).toMatchObject({ targetId: segundo.id, name: 'Oscuro' });
+      // Las cajas escuchan `.changed`: borrar un tema que ninguna usa no debe generar ninguno nuevo.
+      expect(repos.events.filter((e) => e.type === 'organization.pos_theme.changed')).toHaveLength(1);
+    });
+
+    it('un borrado rechazado no deja aviso', async () => {
+      const { app, repos } = createTestApp();
+      const primero = await createTheme(app, 'Clásico');
+      await call(app, 'DELETE', `/organizations/me/pos-themes/${primero.id}`);
+      expect(repos.events.filter((e) => e.type === 'organization.pos_theme.deleted')).toHaveLength(0);
+    });
+
     it('no borra el predeterminado', async () => {
       const { app } = createTestApp();
       const primero = await createTheme(app, 'Clásico');

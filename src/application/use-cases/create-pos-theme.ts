@@ -37,6 +37,16 @@ export class CreatePosThemeUseCase {
       });
       await repos.posThemes.save(theme);
 
+      // Aviso solo para la bitácora de auditoría (el gateway y las cajas escuchan `.changed`, no este). Se publica SIEMPRE:
+      // `.changed` solo sale con el primer tema, así que crear los demás no dejaba ningún rastro.
+      await repos.outbox.add({
+        type: 'organization.pos_theme.created',
+        aggregateType: 'pos_theme',
+        aggregateId: theme.id,
+        payload: { targetId: theme.id, organizationId: input.organizationId, name: theme.name, isDefault: theme.isDefault },
+        occurredAt: new Date(),
+      });
+
       // El primer tema SÍ publica evento, aunque no esté en la lista de §4.4:
       // pasar de "sin tema configurado" a "toda caja con este tema" cambia lo
       // que enseñan todas las cajas, y las cajas solo se enteran por el aviso.
