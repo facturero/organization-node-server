@@ -1,7 +1,4 @@
-import {
-  EmissionPointNotFoundError,
-  EmissionPointNotPosTypeError,
-} from '../../domain/errors';
+import { EmissionPointNotFoundError } from '../../domain/errors';
 import { EmissionPointRepository, EstablishmentRepository, PosThemeRepository } from '../../domain/repositories';
 import { ResolvedPosThemeDTO } from '../dtos';
 import {
@@ -44,9 +41,9 @@ export class ResolvePosThemeUseCase {
     if (!point || point.establishmentId !== input.establishmentId) {
       throw new EmissionPointNotFoundError();
     }
-    if (!point.isPosTerminal()) {
-      throw new EmissionPointNotPosTypeError();
-    }
+    // Sin exigir que sea de tipo `pos`: la caja web (`pos.noahsolution.com`) factura con un punto `web` y pinta el mismo tema que la
+    // de escritorio. El override por punto solo se asigna a puntos `pos` (assign-pos-theme-to-point), así que un punto web
+    // siempre recibe el predeterminado de la organización o el integrado.
 
     // 1. Override del punto. Si el tema ya no existe (se borró, o el punto
     //    quedó apuntando a algo roto) se cae al predeterminado: una caja

@@ -241,6 +241,42 @@ describe('Temas del POS · HTTP', () => {
       expect(body.config?.colors.light.primary).toBe('#2563eb');
     });
 
+    it('un punto web (caja del navegador) también recibe el tema predeterminado', async () => {
+      const { app, repos } = createTestApp();
+      const { est } = await seedOrgWithPosPoint(repos);
+      const theme = await createTheme(app, 'Clásico');
+      const web = {
+        id: 'ep-web-tema',
+        establishmentId: est.id,
+        organizationId: 'org-1',
+        code: '009',
+        name: 'Web',
+        status: 'active' as const,
+        type: 'web' as const,
+        totpSecret: null,
+        pairedAt: null,
+        pairedDeviceId: null,
+        posThemeId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        toPersistence() {
+          return this;
+        },
+        isPaired: () => false,
+        isPosTerminal: () => false,
+        setPosTheme() {},
+        belongsToOrganization: () => true,
+      };
+      await repos.emissionPoints.save(web as never);
+
+      const res = await call(app, 'GET', themeUrl(est.id, web.id));
+      const body = await jsonOf<ResolvedTheme>(res);
+
+      expect(res.status).toBe(200);
+      expect(body.source).toBe('default');
+      expect(body.themeId).toBe(theme.id);
+    });
+
     it('con override la fuente es el punto, aunque sea el mismo tema que el default', async () => {
       const { app, repos } = createTestApp();
       const { est, point } = await seedOrgWithPosPoint(repos);
