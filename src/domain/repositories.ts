@@ -4,7 +4,9 @@ import {
   EmissionPoint,
   OrganizationCountry,
   PosTheme,
+  AppTheme,
 } from './entities';
+import { ThemeSettings } from './app-theme';
 
 export interface DomainEvent {
   type: string;
@@ -53,6 +55,26 @@ export interface PosThemeRepository {
   clearDefaultExcept(organizationId: string, keepThemeId: string): Promise<void>;
 }
 
+export interface AppThemeRepository {
+  findById(id: string): Promise<AppTheme | null>;
+  listByOrganization(organizationId: string): Promise<AppTheme[]>;
+  findByName(organizationId: string, name: string): Promise<AppTheme | null>;
+  save(theme: AppTheme): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
+/** Qué tema ve la empresa por defecto (y si está fijado), y qué eligió cada usuario. */
+export interface ThemePreferenceRepository {
+  /** `null` = la organización nunca tocó sus ajustes de tema (se usan `DEFAULT_THEME_SETTINGS`). */
+  getSettings(organizationId: string): Promise<ThemeSettings | null>;
+  saveSettings(organizationId: string, settings: ThemeSettings): Promise<void>;
+  /** `null` = el usuario nunca eligió (o volvió a «el de la empresa»). */
+  getChoice(organizationId: string, userId: string): Promise<string | null>;
+  saveChoice(organizationId: string, userId: string, theme: string | null): Promise<void>;
+  /** Al borrar un tema: quien lo tenía elegido vuelve al de la empresa. */
+  clearChoicesFor(organizationId: string, theme: string): Promise<void>;
+}
+
 export interface OrganizationCountryRepository {
   listByOrganization(organizationId: string): Promise<OrganizationCountry[]>;
   find(organizationId: string, countryCode: string): Promise<OrganizationCountry | null>;
@@ -75,5 +97,7 @@ export interface Repositories {
   organizationCountries: OrganizationCountryRepository;
   countries: CountryReadModelRepository;
   posThemes: PosThemeRepository;
+  appThemes: AppThemeRepository;
+  themePreferences: ThemePreferenceRepository;
   outbox: OutboxRepository;
 }

@@ -15,6 +15,7 @@ import {
   POS_THEME_SCHEMA_VERSION,
   POS_THEME_STATUS_BAR_POSITIONS,
 } from '../../domain/pos-theme';
+import { APP_THEME_BASES, APP_THEME_SCHEMA_VERSION, BUILTIN_THEME_REFS } from '../../domain/app-theme';
 
 export const upsertOrganizationSchema = z.object({
   legalName: z.string().min(1, 'La razón social es obligatoria.').max(255),
@@ -170,6 +171,44 @@ export const updatePosThemeSchema = createPosThemeSchema;
 export const assignPosThemeSchema = z
   .object({ themeId: z.string().uuid('El themeId debe ser un UUID válido.').nullable() })
   .strict();
+
+/* ------------------------------------------------------------------
+ * Temas de la aplicación web
+ * ------------------------------------------------------------------ */
+
+export const appThemeConfigSchema = z
+  .object({
+    schemaVersion: z.literal(APP_THEME_SCHEMA_VERSION),
+    base: z.enum(APP_THEME_BASES),
+    colors: z
+      .object({
+        primary: hexColor,
+        secondary: hexColor,
+        background: hexColor,
+        surface: hexColor,
+        text: hexColor,
+        success: hexColor,
+        warning: hexColor,
+        error: hexColor,
+      })
+      .strict(),
+  })
+  .strict();
+
+export const saveAppThemeSchema = z
+  .object({
+    name: z.string().trim().min(1, 'El nombre del tema es obligatorio.').max(60),
+    config: appThemeConfigSchema,
+  })
+  .strict();
+
+/** `light`, `dark`, `system` o el id de un tema propio (que el caso de uso comprueba que sea de la organización). */
+const themeRef = z.union([z.enum(BUILTIN_THEME_REFS), z.string().uuid('El tema debe ser light, dark, system o el id de un tema.')]);
+
+export const saveThemeSettingsSchema = z.object({ defaultTheme: themeRef, enforced: z.boolean() }).strict();
+
+/** `null` = volver al tema de la empresa. */
+export const saveMyThemeChoiceSchema = z.object({ theme: themeRef.nullable() }).strict();
 
 export function validateJson<T extends ZodSchema>(schema: T) {
   return zValidator('json', schema, (result) => {

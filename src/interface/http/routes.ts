@@ -21,12 +21,23 @@ import { MakeDefaultPosThemeUseCase } from '../../application/use-cases/make-def
 import { AssignPosThemeToPointUseCase } from '../../application/use-cases/assign-pos-theme-to-point';
 import { ResolvePosThemeUseCase } from '../../application/use-cases/resolve-pos-theme';
 import {
+  CreateAppThemeUseCase,
+  DeleteAppThemeUseCase,
+  GetAppThemesUseCase,
+  SaveMyThemeChoiceUseCase,
+  SaveThemeSettingsUseCase,
+  UpdateAppThemeUseCase,
+} from '../../application/use-cases/app-themes';
+import {
   addCountrySchema,
   assignPosThemeSchema,
   createEmissionPointSchema,
   createEstablishmentSchema,
   createPosThemeSchema,
   pairPosTerminalSchema,
+  saveAppThemeSchema,
+  saveMyThemeChoiceSchema,
+  saveThemeSettingsSchema,
   updateEstablishmentSchema,
   updateOrganizationSchema,
   updatePosThemeSchema,
@@ -39,6 +50,12 @@ import {
   createEmissionPointController,
   createEstablishmentController,
   createPosThemeController,
+  createAppThemeController,
+  deleteAppThemeController,
+  getAppThemesController,
+  saveMyThemeChoiceController,
+  saveThemeSettingsController,
+  updateAppThemeController,
   deletePosThemeController,
   getMyOrganizationController,
   getPairingCodeController,
@@ -56,7 +73,7 @@ import {
   updatePosThemeController,
   upsertOrganizationController,
 } from './controllers';
-import { ContextVariables, requireOrganization, requirePermission } from './middlewares';
+import { ContextVariables, requireOrganization, requirePermission, requireUser } from './middlewares';
 
 type Vars = { Variables: ContextVariables };
 
@@ -83,6 +100,12 @@ export interface AppDependencies {
     makeDefaultPosTheme: MakeDefaultPosThemeUseCase;
     assignPosThemeToPoint: AssignPosThemeToPointUseCase;
     resolvePosTheme: ResolvePosThemeUseCase;
+    getAppThemes: GetAppThemesUseCase;
+    createAppTheme: CreateAppThemeUseCase;
+    updateAppTheme: UpdateAppThemeUseCase;
+    deleteAppTheme: DeleteAppThemeUseCase;
+    saveThemeSettings: SaveThemeSettingsUseCase;
+    saveMyThemeChoice: SaveMyThemeChoiceUseCase;
   };
   corsOrigin: string;
 }
@@ -124,6 +147,43 @@ export function organizationRoutes(deps: AppDependencies): Hono<Vars> {
     requirePermission('organization:admin'),
     validateJson(addCountrySchema),
     addOrganizationCountryController(useCases.addOrganizationCountry));
+
+  /* Temas de la aplicación web. Leerlos y elegir el propio no pide permiso: todo miembro de la organización necesita saber qué
+   * tema pintar. Crear, editar, borrar y decidir el de la empresa es de quien administra la organización. Los ajustes y la
+   * elección van en rutas propias (no bajo `/themes/:themeId`) para que nunca se confundan con un id. */
+  r.get('/organizations/me/themes',
+    requireOrganization(),
+    requireUser(),
+    getAppThemesController(useCases.getAppThemes));
+
+  r.post('/organizations/me/themes',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(saveAppThemeSchema),
+    createAppThemeController(useCases.createAppTheme));
+
+  r.put('/organizations/me/themes/:themeId',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(saveAppThemeSchema),
+    updateAppThemeController(useCases.updateAppTheme));
+
+  r.delete('/organizations/me/themes/:themeId',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    deleteAppThemeController(useCases.deleteAppTheme));
+
+  r.put('/organizations/me/theme-settings',
+    requireOrganization(),
+    requirePermission('organization:admin'),
+    validateJson(saveThemeSettingsSchema),
+    saveThemeSettingsController(useCases.saveThemeSettings));
+
+  r.put('/organizations/me/theme-choice',
+    requireOrganization(),
+    requireUser(),
+    validateJson(saveMyThemeChoiceSchema),
+    saveMyThemeChoiceController(useCases.saveMyThemeChoice));
 
   /* Biblioteca de temas del POS. Los permisos son de organización (no de
    * establecimiento) porque un tema es de toda la organización: es lo que

@@ -24,6 +24,8 @@ tags:
   - name: organization
   - name: establishments
   - name: countries
+  - name: app-themes
+    description: Temas de la aplicación web (claro, oscuro y los que crea la empresa)
   - name: pos-themes
 
 paths:
@@ -268,6 +270,159 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
       x-required-permission: establishment:create
 
+  /organizations/me/themes:
+    get:
+      tags: [app-themes]
+      summary: Temas de la aplicación web, ajustes de la empresa y mi elección
+      description: >
+        Todo lo que el navegador necesita para saber qué tema pintar, en una petición. Sin permiso: cualquier miembro
+        de la organización lo necesita. `settings` sin guardar = claro y sin fijar; `myChoice` null = el de la empresa.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      responses:
+        '200':
+          description: Estado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppThemesState' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+    post:
+      tags: [app-themes]
+      summary: Crear un tema
+      description: >
+        Máximo 20 por organización (409 APP_THEME_LIMIT). 422 LOW_CONTRAST si el texto no se lee sobre el fondo o las
+        tarjetas, o si ni el blanco ni el negro se leen sobre el primario.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveAppThemeRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppTheme' }
+        '401': { $ref: '#/components/responses/OrgContextRequired' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409':
+          description: Nombre repetido (APP_THEME_NAME_EXISTS) o tope alcanzado (APP_THEME_LIMIT)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+
+  /organizations/me/themes/{themeId}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgHeader' }
+      - { name: themeId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [app-themes]
+      summary: Editar un tema (reemplaza nombre y colores)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveAppThemeRequest' }
+      responses:
+        '200':
+          description: Editado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppTheme' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Tema no encontrado (o de otra organización)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Nombre repetido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+    delete:
+      tags: [app-themes]
+      summary: Borrar un tema
+      description: >
+        No se bloquea aunque esté en uso: quien lo tenía elegido vuelve al de la empresa, y si era el de la empresa,
+        la empresa vuelve a claro y sin fijar.
+      responses:
+        '204': { description: Borrado }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Tema no encontrado (o de otra organización)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-required-permission: organization:admin
+
+  /organizations/me/theme-settings:
+    put:
+      tags: [app-themes]
+      summary: Tema de la empresa y si está fijado para todos
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ThemeSettings' }
+      responses:
+        '200':
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThemeSettings' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: El tema elegido no existe en la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+      x-required-permission: organization:admin
+
+  /organizations/me/theme-choice:
+    put:
+      tags: [app-themes]
+      summary: Mi tema
+      description: >
+        Sin permiso: cada uno elige el suyo. 409 THEME_ENFORCED si la empresa fijó su tema y quien pide no tiene
+        organization:admin. `theme: null` = volver al de la empresa.
+      parameters: [{ $ref: '#/components/parameters/OrgHeader' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [theme]
+              properties:
+                theme: { type: string, nullable: true, description: 'light, dark, system o el id de un tema propio.' }
+      responses:
+        '200':
+          description: Guardado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  myChoice: { type: string, nullable: true }
+        '404':
+          description: El tema elegido no existe en la organización
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: La empresa fijó su tema (THEME_ENFORCED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
   /organizations/me/pos-themes:
     get:
       tags: [pos-themes]
@@ -470,6 +625,55 @@ components:
       schema: { type: string, format: uuid }
 
   schemas:
+    AppThemeConfig:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, base, colors]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        base: { type: string, enum: [light, dark] }
+        colors:
+          type: object
+          additionalProperties: false
+          description: '#rrggbb en minúsculas. El resto de la paleta lo deriva el navegador.'
+          required: [primary, secondary, background, surface, text, success, warning, error]
+          properties:
+            primary: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            secondary: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            background: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            surface: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            text: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            success: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            warning: { type: string, pattern: '^#[0-9a-f]{6}$' }
+            error: { type: string, pattern: '^#[0-9a-f]{6}$' }
+    AppTheme:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        config: { $ref: '#/components/schemas/AppThemeConfig' }
+        createdBy: { type: string, format: uuid, nullable: true }
+        updatedAt: { type: string, format: date-time }
+    SaveAppThemeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, config]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        config: { $ref: '#/components/schemas/AppThemeConfig' }
+    ThemeSettings:
+      type: object
+      additionalProperties: false
+      required: [defaultTheme, enforced]
+      properties:
+        defaultTheme: { type: string, description: 'light, dark, system o el id de un tema propio.' }
+        enforced: { type: boolean, description: 'Fijado para todos, salvo los administradores.' }
+    AppThemesState:
+      type: object
+      properties:
+        themes: { type: array, items: { $ref: '#/components/schemas/AppTheme' } }
+        settings: { $ref: '#/components/schemas/ThemeSettings' }
+        myChoice: { type: string, nullable: true }
     Organization:
       type: object
       properties:

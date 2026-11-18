@@ -7,14 +7,18 @@ import {
   CountryReadModelRepository,
   OutboxRepository,
   PosThemeRepository,
+  AppThemeRepository,
+  ThemePreferenceRepository,
   Repositories,
 } from '../domain/repositories';
+import { ThemeSettings } from '../domain/app-theme';
 import {
   Organization,
   Establishment,
   EmissionPoint,
   OrganizationCountry,
   PosTheme,
+  AppTheme,
 } from '../domain/entities';
 import { UnitOfWork, ServiceAccountProvisioner } from '../application/ports';
 import { Hono } from 'hono';
@@ -40,6 +44,14 @@ import { DeletePosThemeUseCase } from '../application/use-cases/delete-pos-theme
 import { MakeDefaultPosThemeUseCase } from '../application/use-cases/make-default-pos-theme';
 import { AssignPosThemeToPointUseCase } from '../application/use-cases/assign-pos-theme-to-point';
 import { ResolvePosThemeUseCase } from '../application/use-cases/resolve-pos-theme';
+import {
+  CreateAppThemeUseCase,
+  DeleteAppThemeUseCase,
+  GetAppThemesUseCase,
+  SaveMyThemeChoiceUseCase,
+  SaveThemeSettingsUseCase,
+  UpdateAppThemeUseCase,
+} from '../application/use-cases/app-themes';
 
 export function createInMemoryRepositories(): Repositories & { events: DomainEvent[] } {
   const orgs = new Map<string, Organization>();
@@ -47,6 +59,9 @@ export function createInMemoryRepositories(): Repositories & { events: DomainEve
   const eps = new Map<string, EmissionPoint>();
   const orgCountries = new Map<string, OrganizationCountry>();
   const themes = new Map<string, PosTheme>();
+  const appThemes = new Map<string, AppTheme>();
+  const themeSettings = new Map<string, ThemeSettings>();
+  const themeChoices = new Map<string, string>();
   const countries = new Map<string, { enabled: boolean }>([['EC', { enabled: true }]]);
   const events: DomainEvent[] = [];
 
@@ -151,6 +166,31 @@ export function createInMemoryRepositories(): Repositories & { events: DomainEve
         }
       },
     } satisfies PosThemeRepository,
+    appThemes: {
+      async findById(id) { return appThemes.get(id) ?? null; },
+      async listByOrganization(organizationId) {
+        return Array.from(appThemes.values())
+          .filter((t) => t.organizationId === organizationId)
+          .sort((a, b) => a.name.localeCompare(b.name));
+      },
+      async findByName(organizationId, name) {
+        return Array.from(appThemes.values()).find((t) => t.organizationId === organizationId && t.name === name) ?? null;
+      },
+      async save(theme) { appThemes.set(theme.id, AppTheme.fromPersistence({ ...theme.toPersistence() })); },
+      async remove(id) { appThemes.delete(id); },
+    } satisfies AppThemeRepository,
+    themePreferences: {
+      async getSettings(organizationId) { return themeSettings.get(organizationId) ?? null; },
+      async saveSettings(organizationId, settings) { themeSettings.set(organizationId, { ...settings }); },
+      async getChoice(organizationId, userId) { return themeChoices.get(`${organizationId}|${userId}`) ?? null; },
+      async saveChoice(organizationId, userId, theme) {
+        if (theme === null) themeChoices.delete(`${organizationId}|${userId}`);
+        else themeChoices.set(`${organizationId}|${userId}`, theme);
+      },
+      async clearChoicesFor(organizationId, theme) {
+        for (const [k, v] of themeChoices) if (k.startsWith(`${organizationId}|`) && v === theme) themeChoices.delete(k);
+      },
+    } satisfies ThemePreferenceRepository,
     outbox: {
       async add(event) {
         events.push({ ...event });
@@ -220,6 +260,12 @@ export function createTestApp(): {
       deletePosTheme: new DeletePosThemeUseCase(uow),
       makeDefaultPosTheme: new MakeDefaultPosThemeUseCase(uow),
       assignPosThemeToPoint: new AssignPosThemeToPointUseCase(uow),
+      getAppThemes: new GetAppThemesUseCase(repos.appThemes, repos.themePreferences),
+      createAppTheme: new CreateAppThemeUseCase(uow),
+      updateAppTheme: new UpdateAppThemeUseCase(uow),
+      deleteAppTheme: new DeleteAppThemeUseCase(uow),
+      saveThemeSettings: new SaveThemeSettingsUseCase(uow),
+      saveMyThemeChoice: new SaveMyThemeChoiceUseCase(uow),
       resolvePosTheme: new ResolvePosThemeUseCase(
         repos.establishments,
         repos.emissionPoints,

@@ -25,6 +25,14 @@ import { DeletePosThemeUseCase } from './application/use-cases/delete-pos-theme'
 import { MakeDefaultPosThemeUseCase } from './application/use-cases/make-default-pos-theme';
 import { AssignPosThemeToPointUseCase } from './application/use-cases/assign-pos-theme-to-point';
 import { ResolvePosThemeUseCase } from './application/use-cases/resolve-pos-theme';
+import {
+  CreateAppThemeUseCase,
+  DeleteAppThemeUseCase,
+  GetAppThemesUseCase,
+  SaveMyThemeChoiceUseCase,
+  SaveThemeSettingsUseCase,
+  UpdateAppThemeUseCase,
+} from './application/use-cases/app-themes';
 import { HttpServiceAccountProvisioner } from './infrastructure/auth-client';
 import { OutboxRelay } from '@facturero/outbox-relay';
 import { createApp } from './interface/http/app';
@@ -63,6 +71,12 @@ async function main(): Promise<void> {
       deletePosTheme: new DeletePosThemeUseCase(uow),
       makeDefaultPosTheme: new MakeDefaultPosThemeUseCase(uow),
       assignPosThemeToPoint: new AssignPosThemeToPointUseCase(uow),
+      getAppThemes: new GetAppThemesUseCase(repos.appThemes, repos.themePreferences),
+      createAppTheme: new CreateAppThemeUseCase(uow),
+      updateAppTheme: new UpdateAppThemeUseCase(uow),
+      deleteAppTheme: new DeleteAppThemeUseCase(uow),
+      saveThemeSettings: new SaveThemeSettingsUseCase(uow),
+      saveMyThemeChoice: new SaveMyThemeChoiceUseCase(uow),
       resolvePosTheme: new ResolvePosThemeUseCase(
         repos.establishments,
         repos.emissionPoints,

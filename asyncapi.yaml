@@ -74,6 +74,36 @@ channels:
     messages:
       posThemeChanged: { $ref: '#/components/messages/PosThemeChanged' }
 
+  appThemeChanged:
+    address: organization.app_theme.{action}
+    description: >-
+      Se creó, editó o borró un tema de la aplicación web (`created`, `updated`, `deleted`). Lo consumen la
+      bitácora de auditoría y api-gateway-node, que avisa por WebSocket a la sala de la organización
+      (`app_theme.changed`) para que las sesiones abiertas vuelvan a pedir sus temas. No lleva los colores.
+    parameters:
+      action:
+        enum: [created, updated, deleted]
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      appThemeChanged: { $ref: '#/components/messages/AppThemeChanged' }
+
+  themeSettingsUpdated:
+    address: organization.theme_settings.updated
+    description: >-
+      La organización cambió su tema por defecto o lo fijó/desfijó para todos. Mismos consumidores que
+      organization.app_theme.*.
+    servers: [{ $ref: '#/servers/rabbitmq' }]
+    bindings:
+      amqp:
+        is: routingKey
+        exchange: { name: crm.events, type: topic, durable: true, vhost: / }
+    messages:
+      themeSettingsUpdated: { $ref: '#/components/messages/ThemeSettingsUpdated' }
+
   taxCountryEnabled:
     address: tax.country.enabled
     description: (Consumido) tax-service habilitó un país; alimenta el read-model `countries`.
@@ -108,6 +138,16 @@ operations:
       Emite organization.pos_theme.changed. El gateway lo reenvía por WebSocket solo a
       las cajas afectadas: si affectedEmissionPointIds es la cadena "all", a todas las
       de la organización.
+
+  publishAppThemeChanged:
+    action: send
+    channel: { $ref: '#/channels/appThemeChanged' }
+    summary: Emite organization.app_theme.created / updated / deleted.
+
+  publishThemeSettingsUpdated:
+    action: send
+    channel: { $ref: '#/channels/themeSettingsUpdated' }
+    summary: Emite organization.theme_settings.updated.
 
   consumeTaxCountryEnabled:
     action: receive
@@ -150,6 +190,18 @@ components:
       contentType: application/json
       traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
       payload: { $ref: '#/components/schemas/PosThemeChangedPayload' }
+    AppThemeChanged:
+      name: organization.app_theme.changed
+      title: Tema de la aplicación creado, editado o borrado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/AppThemeChangedPayload' }
+    ThemeSettingsUpdated:
+      name: organization.theme_settings.updated
+      title: Tema de la empresa cambiado
+      contentType: application/json
+      traits: [{ $ref: '#/components/messageTraits/eventEnvelope' }]
+      payload: { $ref: '#/components/schemas/ThemeSettingsUpdatedPayload' }
     TaxCountryEnabled:
       name: tax.country.enabled
       title: País habilitado (consumido)
@@ -183,6 +235,21 @@ components:
         emissionPointId: { type: string, format: uuid }
         code: { type: string, example: "001" }
         countryCode: { type: string, example: EC }
+    AppThemeChangedPayload:
+      type: object
+      required: [targetId, organizationId, name]
+      properties:
+        targetId: { type: string, format: uuid, description: Id del tema. }
+        organizationId: { type: string, format: uuid }
+        name: { type: string, example: Océano }
+    ThemeSettingsUpdatedPayload:
+      type: object
+      required: [targetId, organizationId, defaultTheme, enforced]
+      properties:
+        targetId: { type: string, format: uuid, description: Id de la organización. }
+        organizationId: { type: string, format: uuid }
+        defaultTheme: { type: string, description: 'light, dark, system o el id de un tema propio.' }
+        enforced: { type: boolean, description: Fijado para todos (salvo los administradores). }
     TaxCountryEnabledPayload:
       type: object
       required: [countryCode]

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { POS_THEME_SCHEMA_VERSION, PosThemeConfig } from './pos-theme';
+import { AppThemeConfig } from './app-theme';
 
 export type OrganizationStatus = 'active' | 'suspended';
 export type EstablishmentsStatus = 'active' | 'inactive';
@@ -378,6 +379,58 @@ export class PosTheme {
   }
 
   toPersistence(): PosThemeProps {
+    return { ...this.props };
+  }
+}
+
+export interface AppThemeProps {
+  id: string;
+  organizationId: string;
+  name: string;
+  config: AppThemeConfig;
+  /** Quién lo creó: se muestra en la lista para que una empresa con varios administradores sepa de quién es cada tema. */
+  createdBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Un tema de la aplicación web. A diferencia del del POS no lleva `isDefault` ni `version`: cuál ve la empresa por defecto (y si
+ * está fijado) se guarda aparte, en los ajustes de tema de la organización, porque el de por defecto puede ser también uno
+ * integrado (claro u oscuro), que no es una fila de esta tabla.
+ */
+export class AppTheme {
+  private constructor(private props: AppThemeProps) {}
+
+  static create(params: { organizationId: string; name: string; config: AppThemeConfig; createdBy: string | null }): AppTheme {
+    const now = new Date();
+    return new AppTheme({ id: randomUUID(), ...params, createdAt: now, updatedAt: now });
+  }
+
+  static fromPersistence(props: AppThemeProps): AppTheme {
+    return new AppTheme({ ...props });
+  }
+
+  get id(): string { return this.props.id; }
+  get organizationId(): string { return this.props.organizationId; }
+  get name(): string { return this.props.name; }
+  get config(): AppThemeConfig { return this.props.config; }
+  get createdBy(): string | null { return this.props.createdBy; }
+  get createdAt(): Date { return this.props.createdAt; }
+  get updatedAt(): Date { return this.props.updatedAt; }
+
+  belongsToOrganization(organizationId: string): boolean {
+    return this.props.organizationId === organizationId;
+  }
+
+  /** El `PUT` reemplaza nombre y colores enteros, como el del POS: lo que se ve es exactamente lo que se guardó. */
+  replace(name: string, config: AppThemeConfig): void {
+    this.props.name = name;
+    this.props.config = config;
+    this.props.updatedAt = new Date();
+  }
+
+  toPersistence(): AppThemeProps {
     return { ...this.props };
   }
 }

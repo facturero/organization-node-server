@@ -1,6 +1,7 @@
 import { DataTypes, InferAttributes, InferCreationAttributes, Model } from 'sequelize';
 import { sequelize } from './sequelize';
 import { PosThemeConfig } from '../../domain/pos-theme';
+import { AppThemeConfig } from '../../domain/app-theme';
 
 export class OrganizationModel extends Model<
   InferAttributes<OrganizationModel>,
@@ -130,6 +131,66 @@ PosThemeModel.init(
     updated_at: DataTypes.DATE,
   },
   { sequelize, tableName: 'pos_themes', timestamps: false },
+);
+
+export class AppThemeModel extends Model<InferAttributes<AppThemeModel>, InferCreationAttributes<AppThemeModel>> {
+  declare id: string;
+  declare organization_id: string;
+  declare name: string;
+  declare config: AppThemeConfig;
+  declare created_by: string | null;
+  declare created_at: Date;
+  declare updated_at: Date;
+}
+
+AppThemeModel.init(
+  {
+    id: { type: DataTypes.CHAR(36), primaryKey: true },
+    organization_id: { type: DataTypes.CHAR(36), allowNull: false },
+    name: { type: DataTypes.STRING(60), allowNull: false },
+    config: { type: DataTypes.JSON, allowNull: false },
+    created_by: { type: DataTypes.CHAR(36), allowNull: true },
+    created_at: DataTypes.DATE,
+    updated_at: DataTypes.DATE,
+  },
+  { sequelize, tableName: 'app_themes', timestamps: false },
+);
+
+export class OrganizationThemeSettingsModel extends Model<
+  InferAttributes<OrganizationThemeSettingsModel>,
+  InferCreationAttributes<OrganizationThemeSettingsModel>
+> {
+  declare organization_id: string;
+  declare default_theme: string;
+  declare enforced: boolean;
+  declare updated_at: Date;
+}
+
+OrganizationThemeSettingsModel.init(
+  {
+    organization_id: { type: DataTypes.CHAR(36), primaryKey: true },
+    default_theme: { type: DataTypes.STRING(36), allowNull: false },
+    enforced: { type: DataTypes.BOOLEAN, allowNull: false },
+    updated_at: DataTypes.DATE,
+  },
+  { sequelize, tableName: 'organization_theme_settings', timestamps: false },
+);
+
+export class UserThemeChoiceModel extends Model<InferAttributes<UserThemeChoiceModel>, InferCreationAttributes<UserThemeChoiceModel>> {
+  declare organization_id: string;
+  declare user_id: string;
+  declare theme: string;
+  declare updated_at: Date;
+}
+
+UserThemeChoiceModel.init(
+  {
+    organization_id: { type: DataTypes.CHAR(36), primaryKey: true },
+    user_id: { type: DataTypes.CHAR(36), primaryKey: true },
+    theme: { type: DataTypes.STRING(36), allowNull: false },
+    updated_at: DataTypes.DATE,
+  },
+  { sequelize, tableName: 'user_theme_choices', timestamps: false },
 );
 
 export class OrganizationCountryModel extends Model<

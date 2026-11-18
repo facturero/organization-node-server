@@ -22,6 +22,15 @@ import { AssignPosThemeToPointUseCase } from '../../application/use-cases/assign
 import { ResolvePosThemeUseCase } from '../../application/use-cases/resolve-pos-theme';
 import { ContextVariables } from './middlewares';
 import { PosThemeConfig } from '../../domain/pos-theme';
+import { AppThemeConfig, ThemeSettings } from '../../domain/app-theme';
+import {
+  CreateAppThemeUseCase,
+  DeleteAppThemeUseCase,
+  GetAppThemesUseCase,
+  SaveMyThemeChoiceUseCase,
+  SaveThemeSettingsUseCase,
+  UpdateAppThemeUseCase,
+} from '../../application/use-cases/app-themes';
 
 export function getMyOrganizationController(useCase: GetMyOrganizationUseCase) {
   return async (c: Context<{ Variables: ContextVariables }>) => {
@@ -305,6 +314,58 @@ export function resolvePosThemeController(useCase: ResolvePosThemeUseCase) {
       return c.body(null, 304);
     }
 
+    return c.json(result, 200);
+  };
+}
+
+/* Temas de la aplicación web. */
+
+type Ctx = Context<{ Variables: ContextVariables }>;
+
+export function getAppThemesController(useCase: GetAppThemesUseCase) {
+  return async (c: Ctx) => c.json(await useCase.execute(c.get('organizationId'), c.get('userId')), 200);
+}
+
+export function createAppThemeController(useCase: CreateAppThemeUseCase) {
+  return async (c: Ctx) => {
+    const body = c.req.valid('json' as never) as { name: string; config: AppThemeConfig };
+    const result = await useCase.execute({ organizationId: c.get('organizationId'), userId: c.get('userId') ?? null, ...body });
+    return c.json(result, 201);
+  };
+}
+
+export function updateAppThemeController(useCase: UpdateAppThemeUseCase) {
+  return async (c: Ctx) => {
+    const body = c.req.valid('json' as never) as { name: string; config: AppThemeConfig };
+    const result = await useCase.execute({ organizationId: c.get('organizationId'), themeId: c.req.param('themeId') ?? '', ...body });
+    return c.json(result, 200);
+  };
+}
+
+export function deleteAppThemeController(useCase: DeleteAppThemeUseCase) {
+  return async (c: Ctx) => {
+    await useCase.execute({ organizationId: c.get('organizationId'), themeId: c.req.param('themeId') ?? '' });
+    return c.body(null, 204);
+  };
+}
+
+export function saveThemeSettingsController(useCase: SaveThemeSettingsUseCase) {
+  return async (c: Ctx) => {
+    const settings = c.req.valid('json' as never) as ThemeSettings;
+    return c.json(await useCase.execute({ organizationId: c.get('organizationId'), settings }), 200);
+  };
+}
+
+export function saveMyThemeChoiceController(useCase: SaveMyThemeChoiceUseCase) {
+  return async (c: Ctx) => {
+    const body = c.req.valid('json' as never) as { theme: string | null };
+    const result = await useCase.execute({
+      organizationId: c.get('organizationId'),
+      userId: c.get('userId'),
+      // «Administrador» = quien puede crear temas y decidir el de la empresa: el fijado no le aplica.
+      isAdmin: (c.get('permissions') ?? []).includes('organization:admin'),
+      theme: body.theme,
+    });
     return c.json(result, 200);
   };
 }

@@ -9,6 +9,9 @@ import {
   OrganizationModel,
   OutboxModel,
   PosThemeModel,
+  AppThemeModel,
+  OrganizationThemeSettingsModel,
+  UserThemeChoiceModel,
 } from './models';
 import {
   Organization,
@@ -16,6 +19,7 @@ import {
   EmissionPoint,
   OrganizationCountry,
   PosTheme,
+  AppTheme,
 } from '../../domain/entities';
 import {
   CountryReadModelRepository,
@@ -26,8 +30,11 @@ import {
   OrganizationRepository,
   OutboxRepository,
   PosThemeRepository,
+  AppThemeRepository,
+  ThemePreferenceRepository,
   Repositories,
 } from '../../domain/repositories';
+import { AppThemeConfig } from '../../domain/app-theme';
 import { UnitOfWork } from '../../application/ports';
 import { withActor } from '@facturero/outbox-relay';
 import { PosThemeConfig } from '../../domain/pos-theme';
@@ -299,6 +306,90 @@ function posThemeRepository(tx?: Transaction): PosThemeRepository {
   };
 }
 
+function toAppTheme(m: AppThemeModel): AppTheme {
+  return AppTheme.fromPersistence({
+    id: m.id,
+    organizationId: m.organization_id,
+    name: m.name,
+    config: m.config as AppThemeConfig,
+    createdBy: m.created_by,
+    createdAt: m.created_at,
+    updatedAt: m.updated_at,
+  });
+}
+
+function appThemeRepository(tx?: Transaction): AppThemeRepository {
+  return {
+    async findById(id) {
+      const m = await AppThemeModel.findByPk(id, { transaction: tx });
+      return m ? toAppTheme(m) : null;
+    },
+    async listByOrganization(organizationId) {
+      const rows = await AppThemeModel.findAll({
+        where: { organization_id: organizationId },
+        order: [['name', 'ASC']],
+        transaction: tx,
+      });
+      return rows.map(toAppTheme);
+    },
+    async findByName(organizationId, name) {
+      const m = await AppThemeModel.findOne({ where: { organization_id: organizationId, name }, transaction: tx });
+      return m ? toAppTheme(m) : null;
+    },
+    async save(theme) {
+      const p = theme.toPersistence();
+      await AppThemeModel.upsert(
+        {
+          id: p.id,
+          organization_id: p.organizationId,
+          name: p.name,
+          config: p.config,
+          created_by: p.createdBy,
+          created_at: p.createdAt,
+          updated_at: p.updatedAt,
+        },
+        { transaction: tx },
+      );
+    },
+    async remove(id) {
+      await AppThemeModel.destroy({ where: { id }, transaction: tx });
+    },
+  };
+}
+
+function themePreferenceRepository(tx?: Transaction): ThemePreferenceRepository {
+  return {
+    async getSettings(organizationId) {
+      const m = await OrganizationThemeSettingsModel.findByPk(organizationId, { transaction: tx });
+      return m ? { defaultTheme: m.default_theme, enforced: m.enforced } : null;
+    },
+    async saveSettings(organizationId, settings) {
+      await OrganizationThemeSettingsModel.upsert(
+        { organization_id: organizationId, default_theme: settings.defaultTheme, enforced: settings.enforced, updated_at: new Date() },
+        { transaction: tx },
+      );
+    },
+    async getChoice(organizationId, userId) {
+      const m = await UserThemeChoiceModel.findOne({ where: { organization_id: organizationId, user_id: userId }, transaction: tx });
+      return m ? m.theme : null;
+    },
+    async saveChoice(organizationId, userId, theme) {
+      // `null` = «el de la empresa»: se borra la fila en vez de guardar un centinela.
+      if (theme === null) {
+        await UserThemeChoiceModel.destroy({ where: { organization_id: organizationId, user_id: userId }, transaction: tx });
+        return;
+      }
+      await UserThemeChoiceModel.upsert(
+        { organization_id: organizationId, user_id: userId, theme, updated_at: new Date() },
+        { transaction: tx },
+      );
+    },
+    async clearChoicesFor(organizationId, theme) {
+      await UserThemeChoiceModel.destroy({ where: { organization_id: organizationId, theme }, transaction: tx });
+    },
+  };
+}
+
 function organizationCountryRepository(tx?: Transaction): OrganizationCountryRepository {
   return {
     async listByOrganization(organizationId) {
@@ -381,6 +472,8 @@ export function buildRepositories(tx?: Transaction): Repositories {
     organizationCountries: organizationCountryRepository(tx),
     countries: countryReadModelRepository(tx),
     posThemes: posThemeRepository(tx),
+    appThemes: appThemeRepository(tx),
+    themePreferences: themePreferenceRepository(tx),
     outbox: outboxRepository(tx),
   };
 }

@@ -1,4 +1,5 @@
 import { PosThemeAsset, PosThemeConfig } from '../domain/pos-theme';
+import { AppThemeConfig, ThemeSettings } from '../domain/app-theme';
 
 export interface OrganizationDTO {
   id: string;
@@ -132,6 +133,21 @@ export interface PosThemeDTO {
   schemaVersion: number;
   config: PosThemeConfig;
   updatedAt: string;
+}
+
+export interface AppThemeDTO {
+  id: string;
+  name: string;
+  config: AppThemeConfig;
+  createdBy: string | null;
+  updatedAt: string;
+}
+
+/** Todo lo que el navegador necesita para saber qué tema pintar, en una sola petición. */
+export interface AppThemesStateDTO {
+  themes: AppThemeDTO[];
+  settings: ThemeSettings;
+  myChoice: string | null;
 }
 
 export interface ResolvedPosThemeDTO {

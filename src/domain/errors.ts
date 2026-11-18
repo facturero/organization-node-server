@@ -166,3 +166,45 @@ export class PosThemeTooLargeError extends AppError {
   readonly httpStatus = 422;
   constructor(message = 'El tema supera el tamaño máximo permitido.') { super(message); }
 }
+
+/* Temas de la aplicación web (no los de la caja). */
+
+export class AppThemeNotFoundError extends AppError {
+  readonly code = 'APP_THEME_NOT_FOUND';
+  readonly httpStatus = 404;
+  constructor(message = 'Tema no encontrado.') { super(message); }
+}
+
+export class AppThemeNameAlreadyExistsError extends AppError {
+  readonly code = 'APP_THEME_NAME_EXISTS';
+  readonly httpStatus = 409;
+  constructor(message = 'Ya existe un tema con ese nombre en la organización.') { super(message); }
+}
+
+export class AppThemeLimitReachedError extends AppError {
+  readonly code = 'APP_THEME_LIMIT';
+  readonly httpStatus = 409;
+  constructor(max: number) { super(`La organización ya tiene ${max} temas, el máximo.`, undefined, { max }); }
+}
+
+export class AppThemeTooLargeError extends AppError {
+  readonly code = 'APP_THEME_TOO_LARGE';
+  readonly httpStatus = 422;
+  constructor(message = 'El tema supera el tamaño máximo permitido.') { super(message); }
+}
+
+/** Mismo código que el del POS (`LOW_CONTRAST`) para que el frontend lo trate igual; el mensaje habla de la aplicación. */
+export class LowContrastAppThemeError extends AppError {
+  readonly code = 'LOW_CONTRAST';
+  readonly httpStatus = 422;
+  constructor(public readonly pairs: ReadonlyArray<{ a: string; b: string; ratio: number; min: number }>) {
+    super('El contraste del tema es demasiado bajo: el texto no se leería bien.', undefined, { pairs });
+  }
+}
+
+/** La empresa fijó su tema para todos: quien no administra la organización no lo puede cambiar. */
+export class ThemeEnforcedError extends AppError {
+  readonly code = 'THEME_ENFORCED';
+  readonly httpStatus = 409;
+  constructor(message = 'Tu empresa fijó el tema para todos.') { super(message); }
+}
