@@ -105,6 +105,14 @@ describe('Temas de la aplicación · HTTP', () => {
     expect((await jsonOf<State>(await app.request('/organizations/me/themes', { headers: staff }))).myChoice).toBeNull();
   });
 
+  it('los temas predefinidos valen como elección y como tema de la empresa; uno inventado no', async () => {
+    const { app } = createTestApp();
+    expect((await app.request('/organizations/me/theme-choice', { method: 'PUT', headers: staff, body: JSON.stringify({ theme: 'preset:forest' }) })).status).toBe(200);
+    expect((await jsonOf<State>(await app.request('/organizations/me/themes', { headers: staff }))).myChoice).toBe('preset:forest');
+    expect((await app.request('/organizations/me/theme-settings', { method: 'PUT', headers: admin, body: JSON.stringify({ defaultTheme: 'preset:midnight', enforced: false }) })).status).toBe(200);
+    expect((await app.request('/organizations/me/theme-choice', { method: 'PUT', headers: staff, body: JSON.stringify({ theme: 'preset:inventado' }) })).status).toBe(422);
+  });
+
   it('fijado para todos: el resto ya no puede elegir, los administradores sí', async () => {
     const { app, repos } = createTestApp();
     const { id } = await jsonOf<{ id: string }>(await create(app));

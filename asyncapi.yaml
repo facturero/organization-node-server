@@ -248,7 +248,7 @@ components:
       properties:
         targetId: { type: string, format: uuid, description: Id de la organización. }
         organizationId: { type: string, format: uuid }
-        defaultTheme: { type: string, description: 'light, dark, system o el id de un tema propio.' }
+        defaultTheme: { type: string, description: 'light, dark, system, preset:* (predefinido) o el id de un tema propio.' }
         enforced: { type: boolean, description: Fijado para todos (salvo los administradores). }
     TaxCountryEnabledPayload:
       type: object

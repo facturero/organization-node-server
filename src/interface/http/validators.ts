@@ -203,7 +203,7 @@ export const saveAppThemeSchema = z
   .strict();
 
 /** `light`, `dark`, `system` o el id de un tema propio (que el caso de uso comprueba que sea de la organización). */
-const themeRef = z.union([z.enum(BUILTIN_THEME_REFS), z.string().uuid('El tema debe ser light, dark, system o el id de un tema.')]);
+const themeRef = z.union([z.enum(BUILTIN_THEME_REFS), z.string().uuid('El tema debe ser light, dark, system, uno predefinido (preset:*) o el id de un tema.')]);
 
 export const saveThemeSettingsSchema = z.object({ defaultTheme: themeRef, enforced: z.boolean() }).strict();
 

@@ -401,7 +401,7 @@ paths:
               type: object
               required: [theme]
               properties:
-                theme: { type: string, nullable: true, description: 'light, dark, system o el id de un tema propio.' }
+                theme: { type: string, nullable: true, description: 'light, dark, system, preset:* (predefinido) o el id de un tema propio.' }
       responses:
         '200':
           description: Guardado
@@ -666,7 +666,7 @@ components:
       additionalProperties: false
       required: [defaultTheme, enforced]
       properties:
-        defaultTheme: { type: string, description: 'light, dark, system o el id de un tema propio.' }
+        defaultTheme: { type: string, description: 'light, dark, system, preset:* (predefinido) o el id de un tema propio.' }
         enforced: { type: boolean, description: 'Fijado para todos, salvo los administradores.' }
     AppThemesState:
       type: object

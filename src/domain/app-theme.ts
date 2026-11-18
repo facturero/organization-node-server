@@ -32,9 +32,25 @@ export interface AppThemeConfig {
 
 /**
  * Referencia a un tema, tal como se guarda en la elección de cada usuario y en el tema de la empresa: uno de los integrados o el
- * id (uuid) de un tema propio. `system` sigue al sistema operativo (claro u oscuro) y solo tiene sentido como elección.
+ * id (uuid) de un tema propio. `system` sigue al sistema operativo (claro u oscuro).
+ *
+ * Los `preset:*` son temas predefinidos que ve toda empresa (como los de Slack; decisión del dueño, 2026-11-18). El servidor solo
+ * conoce sus nombres para validar la referencia: sus colores viven en el frontend (`src/types/appTheme.ts`, `PRESET_THEMES`),
+ * igual que los de claro y oscuro. Si se añade uno, va en las dos listas.
  */
-export const BUILTIN_THEME_REFS = ['light', 'dark', 'system'] as const;
+export const BUILTIN_THEME_REFS = [
+  'light',
+  'dark',
+  'system',
+  'preset:ocean',
+  'preset:forest',
+  'preset:sunset',
+  'preset:lavender',
+  'preset:cherry',
+  'preset:midnight',
+  'preset:graphite',
+  'preset:emerald',
+] as const;
 export type BuiltinThemeRef = (typeof BUILTIN_THEME_REFS)[number];
 export type ThemeRef = BuiltinThemeRef | string;
 
