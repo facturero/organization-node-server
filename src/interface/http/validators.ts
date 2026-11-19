@@ -27,7 +27,7 @@ export const upsertOrganizationSchema = z.object({
 export const updateOrganizationSchema = z.object({
   legalName: z.string().max(255).optional(),
   tradeName: z.string().max(255).optional(),
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const createEstablishmentSchema = z.object({
@@ -49,7 +49,7 @@ export const createEmissionPointSchema = z.object({
 
 export const pairPosTerminalSchema = z.object({
   code: z.string().length(6, 'El código debe tener 6 dígitos.').regex(/^\d{6}$/, 'El código debe ser numérico.'),
-  deviceId: z.string().uuid('deviceId debe ser un UUID válido.'),
+  deviceId: z.string().guid('deviceId debe ser un UUID válido.'),
 });
 
 export const addCountrySchema = z.object({
@@ -72,7 +72,7 @@ const hexColor = z
   .string()
   .regex(/^#[0-9a-f]{6}$/, 'El color debe ser #rrggbb en minúsculas, sin alfa.');
 
-const fileId = z.string().uuid('El fileId debe ser un UUID válido.');
+const fileId = z.string().guid('El fileId debe ser un UUID válido.');
 
 const colorsSchema = z
   .object({
@@ -169,7 +169,7 @@ export const createPosThemeSchema = z
 export const updatePosThemeSchema = createPosThemeSchema;
 
 export const assignPosThemeSchema = z
-  .object({ themeId: z.string().uuid('El themeId debe ser un UUID válido.').nullable() })
+  .object({ themeId: z.string().guid('El themeId debe ser un UUID válido.').nullable() })
   .strict();
 
 /* ------------------------------------------------------------------
@@ -203,7 +203,7 @@ export const saveAppThemeSchema = z
   .strict();
 
 /** `light`, `dark`, `system` o el id de un tema propio (que el caso de uso comprueba que sea de la organización). */
-const themeRef = z.union([z.enum(BUILTIN_THEME_REFS), z.string().uuid('El tema debe ser light, dark, system, uno predefinido (preset:*) o el id de un tema.')]);
+const themeRef = z.union([z.enum(BUILTIN_THEME_REFS), z.string().guid('El tema debe ser light, dark, system, uno predefinido (preset:*) o el id de un tema.')]);
 
 export const saveThemeSettingsSchema = z.object({ defaultTheme: themeRef, enforced: z.boolean() }).strict();
 
